@@ -513,6 +513,7 @@ export default function CoachApp() {
   const [route, setRoute] = useState({ view: "loading" });
   const [students, setStudents] = useState([]);
   const [coachUnlocked, setCoachUnlocked] = useState(() => sessionStorage.getItem("coach_auth") === "1");
+  const [showPin, setShowPin] = useState(() => sessionStorage.getItem("show_pin") === "1");
 
   useEffect(() => {
     function resolve() {
@@ -549,11 +550,38 @@ export default function CoachApp() {
   if (route.view === "loading") return <Shell><LoadingState /></Shell>;
   if (route.view === "student-portal") return <Shell><StudentPortal studentId={route.studentId} /></Shell>;
   if (route.view === "onboarding") return <Shell><OnboardingPage /></Shell>;
-  if (!coachUnlocked) return <Shell><CoachPinGate onUnlock={() => { sessionStorage.setItem("coach_auth","1"); setCoachUnlocked(true); }} /></Shell>;
+  if (!coachUnlocked) return <Shell><LandingPage onCoach={() => { sessionStorage.setItem("show_pin","1"); setShowPin(true); }} showPin={showPin} onUnlock={() => { sessionStorage.setItem("coach_auth","1"); setCoachUnlocked(true); }} /></Shell>;
   return <Shell><CoachApp_Inner students={students} refreshIndex={loadIndex} /></Shell>;
 }
 
 const COACH_PIN = "1234";
+
+function LandingPage({ onCoach, showPin, onUnlock }) {
+  if (showPin) return <CoachPinGate onUnlock={onUnlock} />;
+  return (
+    <div className="landing">
+      <div className="landing-inner">
+        <div className="landing-logo">
+          <div className="mark" />
+          <span className="brand-name">Fonte</span>
+        </div>
+        <p className="landing-sub mono">Studio de coaching</p>
+        <div className="landing-choices">
+          <button className="landing-choice coach" onClick={onCoach}>
+            <span className="lc-icon"><User size={28} strokeWidth={1.6} /></span>
+            <span className="lc-title">Je suis le coach</span>
+            <span className="lc-desc">Accéder au tableau de bord</span>
+          </button>
+          <div className="landing-choice student">
+            <span className="lc-icon"><Dumbbell size={28} strokeWidth={1.6} /></span>
+            <span className="lc-title">Je suis un élève</span>
+            <span className="lc-desc">Ouvre le lien personnel que ton coach t'a envoyé par WhatsApp ou SMS pour accéder à ton espace.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function CoachPinGate({ onUnlock }) {
   const [pin, setPin] = useState("");
@@ -576,14 +604,13 @@ function CoachPinGate({ onUnlock }) {
           {[0,1,2,3].map((i) => <div key={i} className={`pin-dot ${pin.length > i ? "filled" : ""} ${error ? "err" : ""}`} />)}
         </div>
         <div className="pin-grid">
-          {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((k, i) => (
+          {[1,2,3,4,5,6,7,8,9,"",0,"\u232b"].map((k, i) => (
             <button key={i} className={`pin-key ${k === "" ? "invisible" : ""}`} onClick={() => {
-              if (k === "⌫") tryPin(pin.slice(0,-1));
+              if (k === "\u232b") tryPin(pin.slice(0,-1));
               else if (k !== "" && pin.length < 4) tryPin(pin + k);
             }}>{k}</button>
           ))}
         </div>
-        <p className="pin-student-hint">Tu es un élève ? Ouvre le lien<br/>que ton coach t'a envoyé.</p>
       </div>
     </div>
   );
@@ -2032,7 +2059,7 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .pin-key:hover{background:var(--bg-3)}
 .pin-key:active{transform:scale(.92)}
 .pin-key.invisible{visibility:hidden;pointer-events:none}
-.pin-student-hint{font-size:12px;color:var(--txt-4);text-align:center;line-height:1.6;margin:0}
+.landing{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:28px}.landing-inner{width:100%;max-width:360px;display:flex;flex-direction:column;align-items:center;gap:32px}.landing-logo{display:flex;align-items:center;gap:12px}.landing-logo .brand-name{font-family:"Oswald";font-size:28px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}.landing-sub{font-size:11px;color:var(--txt-4);letter-spacing:.14em;text-transform:uppercase;margin:-20px 0 0}.landing-choices{width:100%;display:flex;flex-direction:column;gap:12px}.landing-choice{width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:20px;border-radius:var(--r);border:1px solid var(--line);background:var(--bg-1);text-align:left;cursor:default}.landing-choice.coach{cursor:pointer;transition:.15s}.landing-choice.coach:hover{border-color:var(--acid);background:var(--bg-2)}.landing-choice.coach:active{transform:scale(.98)}.lc-icon{color:var(--acid);display:flex;margin-bottom:4px}.lc-title{font-family:"Oswald";font-size:18px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--txt)}.lc-desc{font-size:12.5px;color:var(--txt-3);line-height:1.5}.landing-choice.student .lc-icon{color:var(--txt-4)}.landing-choice.student .lc-title{color:var(--txt-2)}.pin-student-hint{font-size:12px;color:var(--txt-4);text-align:center;line-height:1.6;margin:0}
 
 .lib-tabs{display:flex;gap:8px;margin-bottom:16px}
 .lib-tab-btn{display:flex;align-items:center;gap:7px;padding:9px 18px;border-radius:var(--r-sm);background:var(--bg-2);border:1px solid var(--line);color:var(--txt-3);font-size:13.5px;font-weight:500;cursor:pointer;transition:.15s}
