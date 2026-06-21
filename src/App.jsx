@@ -1739,7 +1739,7 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .loading-text{font-size:11px;letter-spacing:.15em;color:var(--txt-3)}
 .app-grid{display:grid;grid-template-columns:var(--sidebar-w) 1fr;min-height:100vh}
 .app-grid.is-mobile{display:flex;flex-direction:column;min-height:100vh}
-.sidebar{background:var(--bg-1);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:22px 16px}
+.sidebar{background:var(--bg-1);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:22px 16px;padding-top:max(22px,calc(env(safe-area-inset-top) + 12px))}
 .brand{display:flex;align-items:center;gap:11px;padding:4px 6px 22px;position:relative}
 .mark{width:34px;height:34px;border-radius:7px;flex:none;background:var(--acid);display:grid;place-items:center;box-shadow:0 0 0 1px #0003 inset;position:relative}
 .mark::after{content:"";width:11px;height:11px;border-radius:3px;background:var(--bg)}
@@ -1757,7 +1757,7 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .mobile-drawer.open{transform:translateX(0)}
 .drawer-close{margin-left:auto}
 .main{display:flex;flex-direction:column;min-width:0;min-height:100vh}
-.topbar{height:60px;flex:none;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:0 22px;background:var(--bg)}
+.topbar{height:calc(60px + env(safe-area-inset-top));flex:none;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:env(safe-area-inset-top) 22px 0;background:var(--bg)}
 .topbar h1{font-family:'Oswald';text-transform:uppercase;font-weight:600;font-size:19px;letter-spacing:.03em;white-space:nowrap}
 .topbar .day{font-size:12px;color:var(--txt-3);padding-left:14px;border-left:1px solid var(--line);margin-left:2px;white-space:nowrap}
 .topbar-actions{margin-left:auto;display:flex;gap:8px;flex:none}
@@ -2010,7 +2010,7 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .chat-bubble{max-width:86%}
 .empty-state{padding:48px 20px}
 .day-label-input{font-size:13px}
-.onboarding-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--bg)}
+.onboarding-wrap{min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:calc(env(safe-area-inset-top) + 24px) 24px 24px;background:var(--bg);overflow-y:auto}
 .onboarding-card{width:100%;max-width:480px;background:var(--bg-1);border:1px solid var(--line);border-radius:var(--r);padding:36px 32px}
 .onboarding-logo{display:flex;align-items:center;gap:10px;margin-bottom:28px}
 .onboarding-logo .brand-name{font-family:'Oswald';font-size:22px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--txt)}
@@ -2027,7 +2027,7 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .onboarding-error{color:var(--red);font-size:13px;margin:0}
 @media(max-width:480px){.onboarding-card{padding:28px 20px}}
 .sp-root{display:flex;flex-direction:column;height:100vh;height:100dvh;background:var(--bg);overflow:hidden}
-.sp-header{background:var(--bg-1);border-bottom:1px solid var(--line);padding:16px 20px 14px;flex:none}
+.sp-header{background:var(--bg-1);border-bottom:1px solid var(--line);padding:calc(env(safe-area-inset-top) + 14px) 20px 14px;flex:none}
 .sp-header-inner{display:flex;align-items:center;gap:14px}
 .sp-header-text{flex:1;min-width:0}
 .sp-greeting{font-size:11px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.06em;font-family:'Oswald'}
@@ -2043,7 +2043,7 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .sp-nav-btn.active svg{filter:drop-shadow(0 0 6px #C8FF4D55)}
 .sp-nav-dot{position:absolute;top:10px;right:calc(50% - 16px);width:6px;height:6px;border-radius:50%;background:var(--acid);display:none}
 .sp-nav-btn:last-child .sp-nav-dot{display:block}
-.pin-gate{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:24px}
+.pin-gate{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:calc(env(safe-area-inset-top) + 24px) 24px 24px}
 .pin-card{width:100%;max-width:320px;display:flex;flex-direction:column;align-items:center;gap:24px}
 .pin-logo{display:flex;align-items:center;gap:10px}
 .pin-logo .brand-name{font-family:'Oswald';font-size:24px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--txt)}
@@ -2059,7 +2059,7 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .pin-key:hover{background:var(--bg-3)}
 .pin-key:active{transform:scale(.92)}
 .pin-key.invisible{visibility:hidden;pointer-events:none}
-.landing{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:28px}.landing-inner{width:100%;max-width:360px;display:flex;flex-direction:column;align-items:center;gap:32px}.landing-logo{display:flex;align-items:center;gap:12px}.landing-logo .brand-name{font-family:"Oswald";font-size:28px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}.landing-sub{font-size:11px;color:var(--txt-4);letter-spacing:.14em;text-transform:uppercase;margin:-20px 0 0}.landing-choices{width:100%;display:flex;flex-direction:column;gap:12px}.landing-choice{width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:20px;border-radius:var(--r);border:1px solid var(--line);background:var(--bg-1);text-align:left;cursor:default}.landing-choice.coach{cursor:pointer;transition:.15s}.landing-choice.coach:hover{border-color:var(--acid);background:var(--bg-2)}.landing-choice.coach:active{transform:scale(.98)}.lc-icon{color:var(--acid);display:flex;margin-bottom:4px}.lc-title{font-family:"Oswald";font-size:18px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--txt)}.lc-desc{font-size:12.5px;color:var(--txt-3);line-height:1.5}.landing-choice.student .lc-icon{color:var(--txt-4)}.landing-choice.student .lc-title{color:var(--txt-2)}.pin-student-hint{font-size:12px;color:var(--txt-4);text-align:center;line-height:1.6;margin:0}
+.landing{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:calc(env(safe-area-inset-top) + 28px) 28px 28px}.landing-inner{width:100%;max-width:360px;display:flex;flex-direction:column;align-items:center;gap:32px}.landing-logo{display:flex;align-items:center;gap:12px}.landing-logo .brand-name{font-family:"Oswald";font-size:28px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}.landing-sub{font-size:11px;color:var(--txt-4);letter-spacing:.14em;text-transform:uppercase;margin:-20px 0 0}.landing-choices{width:100%;display:flex;flex-direction:column;gap:12px}.landing-choice{width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:20px;border-radius:var(--r);border:1px solid var(--line);background:var(--bg-1);text-align:left;cursor:default}.landing-choice.coach{cursor:pointer;transition:.15s}.landing-choice.coach:hover{border-color:var(--acid);background:var(--bg-2)}.landing-choice.coach:active{transform:scale(.98)}.lc-icon{color:var(--acid);display:flex;margin-bottom:4px}.lc-title{font-family:"Oswald";font-size:18px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--txt)}.lc-desc{font-size:12.5px;color:var(--txt-3);line-height:1.5}.landing-choice.student .lc-icon{color:var(--txt-4)}.landing-choice.student .lc-title{color:var(--txt-2)}.pin-student-hint{font-size:12px;color:var(--txt-4);text-align:center;line-height:1.6;margin:0}
 
 .lib-tabs{display:flex;gap:8px;margin-bottom:16px}
 .lib-tab-btn{display:flex;align-items:center;gap:7px;padding:9px 18px;border-radius:var(--r-sm);background:var(--bg-2);border:1px solid var(--line);color:var(--txt-3);font-size:13.5px;font-weight:500;cursor:pointer;transition:.15s}
