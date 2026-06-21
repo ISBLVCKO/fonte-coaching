@@ -1753,7 +1753,7 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .nav a .badge{margin-left:auto;font-size:11px;background:var(--red);color:#fff;border-radius:20px;padding:1px 7px;font-weight:600}
 .nav a .badge.soon{background:var(--bg-2);color:var(--txt-4);border:1px solid var(--line);font-weight:500;font-size:9px;text-transform:uppercase;letter-spacing:.05em;padding:2px 6px}
 .nav-scrim{position:fixed;inset:0;background:rgba(11,12,14,0.7);backdrop-filter:blur(2px);z-index:60}
-.mobile-drawer{position:fixed;top:0;left:0;bottom:0;width:78vw;max-width:300px;z-index:70;transform:translateX(-100%);transition:transform .25s ease;box-shadow:20px 0 40px #0008}
+.mobile-drawer{position:fixed;top:0;left:0;bottom:0;width:78vw;max-width:300px;z-index:70;transform:translateX(-100%);transition:transform .25s ease;box-shadow:20px 0 40px #0008;padding-top:max(22px,env(safe-area-inset-top))}
 .mobile-drawer.open{transform:translateX(0)}
 .drawer-close{margin-left:auto}
 .main{display:flex;flex-direction:column;min-width:0;min-height:100vh}
