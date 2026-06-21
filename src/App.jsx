@@ -261,18 +261,31 @@ const FOOD_PRESETS = [
 ];
 
 const MACRO_RULES = {
-  "prise-masse": { label: "Prise de masse", kcalPerKg: 38, proteinPerKg: 2.2, fatPerKg: 1 },
-  "seche": { label: "Sèche", kcalPerKg: 28, proteinPerKg: 2.4, fatPerKg: 0.8 },
-  "maintien": { label: "Maintien", kcalPerKg: 33, proteinPerKg: 2, fatPerKg: 0.9 },
+  "prise-masse": { label: "Prise de masse", surplus: 300, proteinPerKg: { H: 2.2, F: 2.0 }, fatPerKg: { H: 1.0, F: 1.1 } },
+  "seche":       { label: "Sèche",          surplus: -350, proteinPerKg: { H: 2.4, F: 2.2 }, fatPerKg: { H: 0.8, F: 0.9 } },
+  "maintien":    { label: "Maintien",        surplus: 0,    proteinPerKg: { H: 2.0, F: 1.8 }, fatPerKg: { H: 0.9, F: 1.0 } },
 };
 
-function calcMacros(weightKg, goalKey) {
+function calcMacros(weightKg, goalKey, sex = "H", heightCm = "", age = "") {
   const w = parseFloat(weightKg);
   const rule = MACRO_RULES[goalKey];
   if (!w || !rule) return null;
-  const kcal = Math.round(w * rule.kcalPerKg);
-  const protein = Math.round(w * rule.proteinPerKg);
-  const fat = Math.round(w * rule.fatPerKg);
+  const h = parseFloat(heightCm);
+  const a = parseFloat(age);
+  let bmr;
+  if (h && a) {
+    // Mifflin-St Jeor
+    bmr = sex === "F"
+      ? 10 * w + 6.25 * h - 5 * a - 161
+      : 10 * w + 6.25 * h - 5 * a + 5;
+  } else {
+    // Fallback si taille/âge manquants : Harris-Benedict simplifié
+    bmr = sex === "F" ? w * 22 : w * 24;
+  }
+  const tdee = Math.round(bmr * 1.55); // activité modérée
+  const kcal = Math.round(tdee + rule.surplus);
+  const protein = Math.round(w * rule.proteinPerKg[sex] || rule.proteinPerKg["H"]);
+  const fat = Math.round(w * rule.fatPerKg[sex] || rule.fatPerKg["H"]);
   const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
   return { kcal, protein, carbs, fat };
 }
@@ -877,17 +890,35 @@ function FoodPickerModal({ onClose, onPick }) {
 function MacroCalculatorModal({ student, onClose, onApply }) {
   const lastWeight = student.weightHistory?.length ? student.weightHistory[student.weightHistory.length - 1].value : "";
   const [weight, setWeight] = useState(lastWeight);
+  const [height, setHeight] = useState(student.height || "");
+  const [age, setAge] = useState(student.age || "");
+  const [sex, setSex] = useState(student.sex || "H");
   const [goal, setGoal] = useState("prise-masse");
-  const result = calcMacros(weight, goal);
+  const result = calcMacros(weight, goal, sex, height, age);
+  const sexLabel = sex === "F" ? "Femme" : "Homme";
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head"><h3>Calculer les macros</h3><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
-        <p className="modal-text">Calcul basé sur le poids de l'élève et l'objectif choisi. Tu pourras toujours ajuster manuellement après.</p>
+        <p className="modal-text">Calcul personnalisé via la formule Mifflin-St Jeor selon le sexe, l'âge et la taille. Activité modérée (×1.55). Ajustable après.</p>
         <div className="modal-form">
-          <label className="field"><span>Poids actuel (kg)</span><input type="number" step="0.1" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="ex: 78" /></label>
+          <div className="field-row">
+            <label className="field"><span>Sexe</span>
+              <select value={sex} onChange={(e) => setSex(e.target.value)}>
+                <option value="H">Homme</option>
+                <option value="F">Femme</option>
+              </select>
+            </label>
+            <label className="field"><span>Âge</span><input type="number" value={age} onChange={(e) => setAge(e.target.value)} placeholder="ex: 25" /></label>
+          </div>
+          <div className="field-row">
+            <label className="field"><span>Taille (cm)</span><input type="number" value={height} onChange={(e) => setHeight(e.target.value)} placeholder="ex: 175" /></label>
+            <label className="field"><span>Poids (kg)</span><input type="number" step="0.1" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="ex: 78" /></label>
+          </div>
           <div className="goal-switch">{Object.entries(MACRO_RULES).map(([key, rule]) => <button key={key} className={`chip-btn lg ${goal === key ? "active" : ""}`} onClick={() => setGoal(key)}>{rule.label}</button>)}</div>
-          {result ? <div className="macro-readout" style={{ marginTop: 4 }}><MacroChip label="Calories" value={result.kcal} unit="kcal" /><MacroChip label="Protéines" value={result.protein} unit="g" /><MacroChip label="Glucides" value={result.carbs} unit="g" /><MacroChip label="Lipides" value={result.fat} unit="g" /></div> : <p className="muted small">Renseigne le poids pour calculer les macros.</p>}
+          {result
+            ? <><p className="muted small" style={{marginBottom:4}}>{sexLabel} · TDEE estimé : {Math.round(result.kcal - MACRO_RULES[goal].surplus)} kcal · Cible : {result.kcal} kcal</p><div className="macro-readout"><MacroChip label="Calories" value={result.kcal} unit="kcal" /><MacroChip label="Protéines" value={result.protein} unit="g" /><MacroChip label="Glucides" value={result.carbs} unit="g" /><MacroChip label="Lipides" value={result.fat} unit="g" /></div></>
+            : <p className="muted small">Renseigne le poids pour calculer les macros.</p>}
           <button className="btn primary full" disabled={!result} onClick={() => result && onApply(result)}>Appliquer ces macros</button>
         </div>
       </div>
