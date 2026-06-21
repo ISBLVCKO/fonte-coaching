@@ -2001,7 +2001,7 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 @media(max-width:760px){
 .app-grid{display:flex;flex-direction:column}
 .main{width:100%}
-.topbar{padding:0 14px;gap:10px;height:56px}
+.topbar{padding:env(safe-area-inset-top) 14px 0;gap:10px;height:calc(56px + env(safe-area-inset-top))}
 .topbar h1{font-size:16px}
 .scroll{padding:16px}
 .kpis{grid-template-columns:repeat(2,1fr);gap:10px}
