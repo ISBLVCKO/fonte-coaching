@@ -332,6 +332,8 @@ const DIET_LIBRARY = {
     ],
   },
 };
+
+const PROGRAM_LIBRARY = {
   "pro-masse": {
     id: "pro-masse", label: "Pro Masse",
     sessions: [
