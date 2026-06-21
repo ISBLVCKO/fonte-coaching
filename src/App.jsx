@@ -585,9 +585,15 @@ function OnboardingPage() {
       <div className="onboarding-card">
         <div className="onboarding-logo"><div className="mark" /><span className="brand-name">Fonte</span></div>
         <div className="onboarding-success">
-          <Check size={40} color="var(--acid)" strokeWidth={2.5} />
-          <h2>C'est enregistré !</h2>
-          <p className="muted">Ton coach a bien reçu tes informations. Tu vas être ajouté(e) à son suivi très prochainement.</p>
+          <div className="ob-check-circle"><Check size={32} color="#0E0F12" strokeWidth={3} /></div>
+          <h2>Inscription envoyée !</h2>
+          <p className="muted">Tes informations ont bien été reçues par ton coach.</p>
+          <div className="ob-next-steps">
+            <div className="ob-step"><span className="ob-step-num mono">01</span><div><strong>Ton coach prépare ta fiche</strong><p>Il va créer ton programme d'entraînement et ta diète personnalisée.</p></div></div>
+            <div className="ob-step"><span className="ob-step-num mono">02</span><div><strong>Il t'envoie ton lien personnel</strong><p>Tu recevras un lien unique (WhatsApp, SMS…) pour accéder à ton espace : programme, diète et messagerie avec ton coach.</p></div></div>
+            <div className="ob-step"><span className="ob-step-num mono">03</span><div><strong>Tu suis tout depuis ton téléphone</strong><p>Ajoute l'app à ton écran d'accueil pour un accès rapide.</p></div></div>
+          </div>
+          <p className="ob-waiting">En attendant, pas d'action requise de ta part. 💪</p>
         </div>
       </div>
     </div>
@@ -1008,60 +1014,77 @@ function StudentPortal({ studentId }) {
   const diet = student.diet || { planName: "", calories: "", protein: "", carbs: "", fat: "", meals: [] };
   const lastWeight = student.weightHistory?.length ? student.weightHistory[student.weightHistory.length - 1].value : null;
   return (
-    <div className="portal">
-      <div className="detail-identity">
-        <Plate name={student.name} size={80} />
-        <div>
-          <div className="eyebrow">TON ESPACE</div>
-          <h1 className="detail-name">{student.name}</h1>
-          <div className="dmeta">
-            <span className="pill mono">{student.age ? `${student.age} ans` : "—"}</span>
-            <span className="pill mono">{student.height ? `${student.height} cm` : "—"}</span>
-            <span className="pill mono">{lastWeight ? `${lastWeight} kg` : "—"}</span>
+    <div className="sp-root">
+      <header className="sp-header">
+        <div className="sp-header-inner">
+          <div className="sp-avatar"><Plate name={student.name} size={42} /></div>
+          <div className="sp-header-text">
+            <div className="sp-greeting">Bonjour,</div>
+            <div className="sp-name">{student.name}</div>
+          </div>
+          <div className="sp-pills">
+            {student.age && <span className="pill mono">{student.age} ans</span>}
+            {lastWeight && <span className="pill mono">{lastWeight} kg</span>}
           </div>
         </div>
-      </div>
-      <nav className="tabs">
-        <TabBtn active={tab === "entrainement"} onClick={() => setTab("entrainement")} icon={<Dumbbell size={15} />} label="Entraînement" />
-        <TabBtn active={tab === "diete"} onClick={() => setTab("diete")} icon={<Apple size={15} />} label="Diète" />
-        <TabBtn active={tab === "chat"} onClick={() => setTab("chat")} icon={<MessageCircle size={15} />} label="Coach" />
-      </nav>
-      <div className="tab-panel">
+      </header>
+
+      <div className="sp-content">
         {tab === "entrainement" && (
           <div className="panel-stack">
-            <div className="block-card"><h3 className="card-title">{training.planName || "Programme à venir"}</h3></div>
-            {training.days.length === 0 && <p className="muted center">Ton coach n'a pas encore ajouté de programme.</p>}
-            {training.days.map((day) => (
-              <div className="block-card" key={day.id}>
-                <h4 className="day-title-readonly">{day.label}</h4>
-                <div className="exercise-table">
-                  {day.exercises.length > 0 && <div className="exercise-table-head readonly mono"><span>Exercice</span><span>Séries</span><span>Reps</span><span>Charge</span></div>}
-                  {day.exercises.map((ex) => <div className="exercise-row readonly" key={ex.id}><span>{ex.name || "—"}</span><span>{ex.sets || "—"}</span><span>{ex.reps || "—"}</span><span>{ex.load || "—"}</span></div>)}
+            {training.planName ? <div className="sp-plan-banner"><Dumbbell size={16} color="var(--acid)" />{training.planName}</div> : null}
+            {training.days.length === 0
+              ? <div className="sp-empty-tab"><Dumbbell size={36} strokeWidth={1.2} color="var(--txt-4)" /><p>Ton programme arrive bientôt.<br/>Ton coach est en train de le préparer.</p></div>
+              : training.days.map((day) => (
+                <div className="block-card" key={day.id}>
+                  <h4 className="day-title-readonly">{day.label}</h4>
+                  <div className="exercise-table">
+                    {day.exercises.length > 0 && <div className="exercise-table-head readonly mono"><span>Exercice</span><span>Séries</span><span>Reps</span><span>Charge</span></div>}
+                    {day.exercises.map((ex) => <div className="exercise-row readonly" key={ex.id}><span>{ex.name || "—"}</span><span>{ex.sets || "—"}</span><span>{ex.reps || "—"}</span><span>{ex.load || "—"}</span></div>)}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            }
           </div>
         )}
         {tab === "diete" && (
           <div className="panel-stack">
-            <div className="block-card">
-              <h3 className="card-title">{diet.planName || "Diète à venir"}</h3>
-              <div className="macro-readout"><MacroChip label="Calories" value={diet.calories} unit="kcal" /><MacroChip label="Protéines" value={diet.protein} unit="g" /><MacroChip label="Glucides" value={diet.carbs} unit="g" /><MacroChip label="Lipides" value={diet.fat} unit="g" /></div>
-            </div>
-            {diet.meals.length === 0 && <p className="muted center">Ton coach n'a pas encore ajouté de repas.</p>}
-            {diet.meals.map((meal) => (
-              <div className="block-card" key={meal.id}>
-                <h4 className="day-title-readonly">{meal.label}</h4>
-                {meal.items?.length > 0 ? (
-                  <div className="meal-items readonly">{meal.items.map((it) => <div className="meal-item-row readonly" key={it.id}><span className="mi-name">{it.name}</span><span className="mi-amount-readonly mono">{it.amount}g</span><span className="mi-kcal mono">{Math.round((it.kcal * it.amount) / 100)} kcal</span></div>)}</div>
-                ) : <p className="meal-readonly">{meal.content || "—"}</p>}
-                {meal.notes && <p className="meal-readonly" style={{ marginTop: 8 }}>{meal.notes}</p>}
-              </div>
-            ))}
+            {diet.planName ? <div className="sp-plan-banner"><Apple size={16} color="var(--acid)" />{diet.planName}</div> : null}
+            {(diet.calories || diet.protein) && (
+              <div className="block-card"><div className="macro-readout"><MacroChip label="Calories" value={diet.calories} unit="kcal" /><MacroChip label="Protéines" value={diet.protein} unit="g" /><MacroChip label="Glucides" value={diet.carbs} unit="g" /><MacroChip label="Lipides" value={diet.fat} unit="g" /></div></div>
+            )}
+            {diet.meals.length === 0
+              ? <div className="sp-empty-tab"><Apple size={36} strokeWidth={1.2} color="var(--txt-4)" /><p>Ta diète arrive bientôt.<br/>Ton coach est en train de la préparer.</p></div>
+              : diet.meals.map((meal) => (
+                <div className="block-card" key={meal.id}>
+                  <h4 className="day-title-readonly">{meal.label}</h4>
+                  {meal.items?.length > 0
+                    ? <div className="meal-items readonly">{meal.items.map((it) => <div className="meal-item-row readonly" key={it.id}><span className="mi-name">{it.name}</span><span className="mi-amount-readonly mono">{it.amount}g</span><span className="mi-kcal mono">{Math.round((it.kcal * it.amount) / 100)} kcal</span></div>)}</div>
+                    : <p className="meal-readonly">{meal.content || "—"}</p>}
+                  {meal.notes && <p className="meal-readonly" style={{ marginTop: 8 }}>{meal.notes}</p>}
+                </div>
+              ))
+            }
           </div>
         )}
         {tab === "chat" && <ChatPanel studentId={studentId} sender="student" />}
       </div>
+
+      <nav className="sp-bottom-nav">
+        <button className={`sp-nav-btn ${tab === "entrainement" ? "active" : ""}`} onClick={() => setTab("entrainement")}>
+          <Dumbbell size={22} strokeWidth={tab === "entrainement" ? 2.2 : 1.6} />
+          <span>Entraînement</span>
+        </button>
+        <button className={`sp-nav-btn ${tab === "diete" ? "active" : ""}`} onClick={() => setTab("diete")}>
+          <Apple size={22} strokeWidth={tab === "diete" ? 2.2 : 1.6} />
+          <span>Diète</span>
+        </button>
+        <button className={`sp-nav-btn ${tab === "chat" ? "active" : ""}`} onClick={() => setTab("chat")}>
+          <MessageCircle size={22} strokeWidth={tab === "chat" ? 2.2 : 1.6} />
+          <span>Mon coach</span>
+          <span className="sp-nav-dot" />
+        </button>
+      </nav>
     </div>
   );
 }
@@ -1594,9 +1617,33 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .onboarding-logo{display:flex;align-items:center;gap:10px;margin-bottom:28px}
 .onboarding-logo .brand-name{font-family:'Oswald';font-size:22px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--txt)}
 .onboarding-title{font-family:'Oswald';text-transform:uppercase;font-size:20px;font-weight:600;margin:0 0 6px}
-.onboarding-success{display:flex;flex-direction:column;align-items:center;gap:16px;padding:24px 0;text-align:center}
+.onboarding-success{display:flex;flex-direction:column;align-items:center;gap:20px;padding:8px 0;text-align:center}
 .onboarding-success h2{font-family:'Oswald';text-transform:uppercase;font-size:22px;margin:0}
+.ob-check-circle{width:64px;height:64px;border-radius:50%;background:var(--acid);display:flex;align-items:center;justify-content:center;flex:none}
+.ob-next-steps{width:100%;display:flex;flex-direction:column;gap:16px;text-align:left;background:var(--bg-2);border-radius:var(--r-sm);padding:20px}
+.ob-step{display:flex;gap:14px;align-items:flex-start}
+.ob-step-num{font-size:11px;font-weight:700;color:var(--acid);background:var(--bg-3);border-radius:4px;padding:2px 6px;flex:none;margin-top:2px}
+.ob-step strong{display:block;font-size:13.5px;font-weight:600;margin-bottom:3px}
+.ob-step p{margin:0;font-size:12.5px;color:var(--txt-2);line-height:1.5}
+.ob-waiting{font-size:13px;color:var(--txt-3);margin:0}
 .onboarding-error{color:var(--red);font-size:13px;margin:0}
 @media(max-width:480px){.onboarding-card{padding:28px 20px}}
+.sp-root{display:flex;flex-direction:column;height:100vh;height:100dvh;background:var(--bg);overflow:hidden}
+.sp-header{background:var(--bg-1);border-bottom:1px solid var(--line);padding:16px 20px 14px;flex:none}
+.sp-header-inner{display:flex;align-items:center;gap:14px}
+.sp-header-text{flex:1;min-width:0}
+.sp-greeting{font-size:11px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.06em;font-family:'Oswald'}
+.sp-name{font-family:'Oswald';font-size:20px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp-pills{display:flex;gap:6px;flex-wrap:wrap}
+.sp-content{flex:1;overflow-y:auto;padding:16px}
+.sp-plan-banner{display:flex;align-items:center;gap:10px;font-family:'Oswald';font-size:15px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;color:var(--txt-2);padding:10px 14px;background:var(--bg-2);border-radius:var(--r-sm);margin-bottom:4px}
+.sp-empty-tab{display:flex;flex-direction:column;align-items:center;gap:14px;padding:60px 20px;text-align:center;color:var(--txt-3)}
+.sp-empty-tab p{margin:0;font-size:14px;line-height:1.6}
+.sp-bottom-nav{display:flex;background:var(--bg-1);border-top:1px solid var(--line);flex:none;padding-bottom:env(safe-area-inset-bottom)}
+.sp-nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:12px 8px;background:none;border:none;cursor:pointer;color:var(--txt-4);font-size:11px;font-weight:500;letter-spacing:.02em;position:relative;transition:color .15s}
+.sp-nav-btn.active{color:var(--acid)}
+.sp-nav-btn.active svg{filter:drop-shadow(0 0 6px #C8FF4D55)}
+.sp-nav-dot{position:absolute;top:10px;right:calc(50% - 16px);width:6px;height:6px;border-radius:50%;background:var(--acid);display:none}
+.sp-nav-btn:last-child .sp-nav-dot{display:block}
 }
 `;
