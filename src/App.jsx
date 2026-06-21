@@ -126,34 +126,34 @@ const EXERCISE_PRESETS = [
 
 const DIET_LIBRARY = {
   "diete-seche": {
-    id: "diete-seche", label: "Sèche", emoji: "🔥",
+    id: "diete-seche", label: "Sèche",
     description: "Déficit calorique modéré · Haute protéine · 5 repas/jour",
     kcal: "~1900 kcal", protein: "~185g", carbs: "~160g", fat: "~55g",
     plans: [
       {
         id: "ds-j1", label: "Journée A — Classique",
         meals: [
-          { id: "ds-j1-m1", label: "🌅 Petit-déjeuner", notes: "À prendre 30 min après le réveil. Riche en protéines pour limiter le catabolisme matinal.", items: [
+          { id: "ds-j1-m1", label: "Petit-déjeuner", notes: "À prendre 30 min après le réveil. Riche en protéines pour limiter le catabolisme matinal.", items: [
             { id: uid(), name: "Flocons d'avoine", amount: 60, kcal: 370, protein: 13, carbs: 59, fat: 7 },
             { id: uid(), name: "Blanc d'œuf", amount: 150, kcal: 52, protein: 11, carbs: 0.5, fat: 0.2 },
             { id: uid(), name: "Fromage blanc 0%", amount: 150, kcal: 64, protein: 11, carbs: 5, fat: 0 },
             { id: uid(), name: "Fruits rouges", amount: 80, kcal: 40, protein: 0.6, carbs: 10, fat: 0.2 },
           ]},
-          { id: "ds-j1-m2", label: "🥤 Collation matinale", notes: "Shaker à prendre 1h30 avant l'entraînement si séance le matin, ou en milieu de matinée.", items: [
+          { id: "ds-j1-m2", label: "Collation matinale", notes: "Shaker à prendre 1h30 avant l'entraînement si séance le matin, ou en milieu de matinée.", items: [
             { id: uid(), name: "Whey protéine", amount: 30, kcal: 113, protein: 24, carbs: 3, fat: 1.5 },
             { id: uid(), name: "Pomme", amount: 150, kcal: 78, protein: 0.5, carbs: 21, fat: 0.3 },
           ]},
-          { id: "ds-j1-m3", label: "☀️ Déjeuner", notes: "Repas principal. Prépare en avance pour la semaine (batch cooking). Cuisson vapeur ou plancha.", items: [
+          { id: "ds-j1-m3", label: "Déjeuner", notes: "Repas principal. Prépare en avance pour la semaine (batch cooking). Cuisson vapeur ou plancha.", items: [
             { id: uid(), name: "Blanc de poulet", amount: 200, kcal: 220, protein: 46, carbs: 0, fat: 2.4 },
             { id: uid(), name: "Riz blanc cuit", amount: 180, kcal: 234, protein: 4.3, carbs: 51, fat: 0.5 },
             { id: uid(), name: "Brocoli", amount: 150, kcal: 51, protein: 4.2, carbs: 7, fat: 0.5 },
             { id: uid(), name: "Huile d'olive", amount: 10, kcal: 90, protein: 0, carbs: 0, fat: 10 },
           ]},
-          { id: "ds-j1-m4", label: "🥤 Collation après entraînement", notes: "À prendre dans les 30 min après l'effort. Cruciale pour la récupération musculaire.", items: [
+          { id: "ds-j1-m4", label: "Collation post-workout", notes: "À prendre dans les 30 min après l'effort. Cruciale pour la récupération musculaire.", items: [
             { id: uid(), name: "Whey protéine", amount: 30, kcal: 113, protein: 24, carbs: 3, fat: 1.5 },
             { id: uid(), name: "Banane", amount: 120, kcal: 107, protein: 1.3, carbs: 27, fat: 0.4 },
           ]},
-          { id: "ds-j1-m5", label: "🌙 Dîner", notes: "Repas léger, sans glucides complexes. Favorise la récupération nocturne.", items: [
+          { id: "ds-j1-m5", label: "Dîner", notes: "Repas léger, sans glucides complexes. Favorise la récupération nocturne.", items: [
             { id: uid(), name: "Saumon frais", amount: 180, kcal: 374, protein: 36, carbs: 0, fat: 25 },
             { id: uid(), name: "Patate douce cuite", amount: 150, kcal: 129, protein: 2.4, carbs: 30, fat: 0.2 },
             { id: uid(), name: "Haricots verts", amount: 150, kcal: 37, protein: 2.4, carbs: 6, fat: 0.3 },
@@ -163,27 +163,27 @@ const DIET_LIBRARY = {
       {
         id: "ds-j2", label: "Journée B — Sans gluten",
         meals: [
-          { id: "ds-j2-m1", label: "🌅 Petit-déjeuner", notes: "Option sans gluten. Les œufs entiers apportent des acides aminés essentiels et des oméga-3.", items: [
+          { id: "ds-j2-m1", label: "Petit-déjeuner", notes: "Option sans gluten. Les œufs entiers apportent des acides aminés essentiels et des oméga-3.", items: [
             { id: uid(), name: "Œuf entier", amount: 150, kcal: 215, protein: 18, carbs: 1, fat: 15 },
             { id: uid(), name: "Fromage blanc 0%", amount: 200, kcal: 86, protein: 15, carbs: 7, fat: 0 },
             { id: uid(), name: "Fruits rouges", amount: 100, kcal: 50, protein: 0.7, carbs: 12, fat: 0.3 },
           ]},
-          { id: "ds-j2-m2", label: "🥤 Shaker pré-workout", notes: "À prendre 45 min avant l'entraînement. La caféine du café améliore les performances.", items: [
+          { id: "ds-j2-m2", label: "Shaker pré-workout", notes: "À prendre 45 min avant l'entraînement. La caféine du café améliore les performances.", items: [
             { id: uid(), name: "Whey protéine", amount: 30, kcal: 113, protein: 24, carbs: 3, fat: 1.5 },
             { id: uid(), name: "Compote de pomme", amount: 100, kcal: 52, protein: 0.3, carbs: 11, fat: 0.2 },
           ]},
-          { id: "ds-j2-m3", label: "☀️ Déjeuner", notes: "Recette : dinde en dés sautée à l'ail + quinoa cuit + salade de crudités. Assaisonnement : citron + herbes.", items: [
+          { id: "ds-j2-m3", label: "Déjeuner", notes: "Recette : dinde en dés sautée à l'ail + quinoa cuit + salade de crudités. Assaisonnement : citron + herbes.", items: [
             { id: uid(), name: "Blanc de dinde", amount: 200, kcal: 218, protein: 44, carbs: 0, fat: 2 },
             { id: uid(), name: "Quinoa cuit", amount: 150, kcal: 180, protein: 6.6, carbs: 32, fat: 3 },
             { id: uid(), name: "Tomate", amount: 150, kcal: 27, protein: 1.3, carbs: 5.2, fat: 0.3 },
             { id: uid(), name: "Concombre", amount: 100, kcal: 15, protein: 0.6, carbs: 3.1, fat: 0.1 },
             { id: uid(), name: "Huile d'olive", amount: 10, kcal: 90, protein: 0, carbs: 0, fat: 10 },
           ]},
-          { id: "ds-j2-m4", label: "🥤 Collation après entraînement", notes: "Shaker de récupération. La whey + la banane reconstituent les stocks de glycogène.", items: [
+          { id: "ds-j2-m4", label: "Collation post-workout", notes: "Shaker de récupération. La whey + la banane reconstituent les stocks de glycogène.", items: [
             { id: uid(), name: "Whey protéine", amount: 30, kcal: 113, protein: 24, carbs: 3, fat: 1.5 },
             { id: uid(), name: "Banane", amount: 100, kcal: 89, protein: 1.1, carbs: 23, fat: 0.3 },
           ]},
-          { id: "ds-j2-m5", label: "🌙 Dîner", notes: "Recette : cabillaud vapeur + légumes rôtis au four (courgettes, poivrons, oignons) + fromage blanc en dessert.", items: [
+          { id: "ds-j2-m5", label: "Dîner", notes: "Recette : cabillaud vapeur + légumes rôtis au four (courgettes, poivrons, oignons) + fromage blanc en dessert.", items: [
             { id: uid(), name: "Cabillaud", amount: 200, kcal: 176, protein: 38, carbs: 0, fat: 1.6 },
             { id: uid(), name: "Courgette", amount: 200, kcal: 34, protein: 2.6, carbs: 5.4, fat: 0.4 },
             { id: uid(), name: "Fromage blanc 0%", amount: 150, kcal: 64, protein: 11, carbs: 5, fat: 0 },
@@ -193,28 +193,28 @@ const DIET_LIBRARY = {
       {
         id: "ds-j3", label: "Journée C — Végétarienne",
         meals: [
-          { id: "ds-j3-m1", label: "🌅 Petit-déjeuner protéiné", notes: "Version végétarienne. Le skyr et les œufs couvrent les besoins protéiques du matin.", items: [
+          { id: "ds-j3-m1", label: "Petit-déjeuner protéiné", notes: "Version végétarienne. Le skyr et les œufs couvrent les besoins protéiques du matin.", items: [
             { id: uid(), name: "Skyr nature", amount: 200, kcal: 120, protein: 20, carbs: 8, fat: 0.4 },
             { id: uid(), name: "Blanc d'œuf", amount: 100, kcal: 35, protein: 7.2, carbs: 0.3, fat: 0.1 },
             { id: uid(), name: "Flocons d'avoine", amount: 50, kcal: 185, protein: 6.4, carbs: 32, fat: 3.4 },
             { id: uid(), name: "Fruits rouges", amount: 100, kcal: 50, protein: 0.7, carbs: 12, fat: 0.3 },
           ]},
-          { id: "ds-j3-m2", label: "🥤 Collation matinale", notes: "Les amandes sont riches en graisses saines et limitent les fringales.", items: [
+          { id: "ds-j3-m2", label: "Collation matinale", notes: "Les amandes sont riches en graisses saines et limitent les fringales.", items: [
             { id: uid(), name: "Whey protéine", amount: 30, kcal: 113, protein: 24, carbs: 3, fat: 1.5 },
             { id: uid(), name: "Amandes", amount: 20, kcal: 116, protein: 4.3, carbs: 2, fat: 10 },
           ]},
-          { id: "ds-j3-m3", label: "☀️ Déjeuner", notes: "Recette : bowl de légumineuses — lentilles + œufs durs + légumes crus + vinaigrette légère.", items: [
+          { id: "ds-j3-m3", label: "Déjeuner", notes: "Recette : bowl de légumineuses — lentilles + œufs durs + légumes crus + vinaigrette légère.", items: [
             { id: uid(), name: "Lentilles cuites", amount: 200, kcal: 230, protein: 18, carbs: 40, fat: 0.8 },
             { id: uid(), name: "Œuf entier", amount: 100, kcal: 143, protein: 12, carbs: 0.7, fat: 10 },
             { id: uid(), name: "Épinards frais", amount: 100, kcal: 23, protein: 2.9, carbs: 1.4, fat: 0.4 },
             { id: uid(), name: "Tomate", amount: 100, kcal: 18, protein: 0.9, carbs: 3.5, fat: 0.2 },
             { id: uid(), name: "Huile d'olive", amount: 8, kcal: 72, protein: 0, carbs: 0, fat: 8 },
           ]},
-          { id: "ds-j3-m4", label: "🥤 Collation après entraînement", notes: "Shaker végétal ou whey standard. Le fromage blanc ajoute des caséines pour la récupération longue.", items: [
+          { id: "ds-j3-m4", label: "Collation post-workout", notes: "Shaker végétal ou whey standard. Le fromage blanc ajoute des caséines pour la récupération longue.", items: [
             { id: uid(), name: "Whey protéine", amount: 30, kcal: 113, protein: 24, carbs: 3, fat: 1.5 },
             { id: uid(), name: "Fromage blanc 0%", amount: 100, kcal: 43, protein: 7.3, carbs: 3.3, fat: 0 },
           ]},
-          { id: "ds-j3-m5", label: "🌙 Dîner", notes: "Recette : tofu sauté aux légumes + patate douce + fromage blanc. Assaisonnement soja + gingembre.", items: [
+          { id: "ds-j3-m5", label: "Dîner", notes: "Recette : tofu sauté aux légumes + patate douce + fromage blanc. Assaisonnement soja + gingembre.", items: [
             { id: uid(), name: "Tofu ferme", amount: 200, kcal: 160, protein: 18, carbs: 4, fat: 8 },
             { id: uid(), name: "Patate douce cuite", amount: 100, kcal: 86, protein: 1.6, carbs: 20, fat: 0.1 },
             { id: uid(), name: "Brocoli", amount: 150, kcal: 51, protein: 4.2, carbs: 7, fat: 0.5 },
@@ -224,37 +224,37 @@ const DIET_LIBRARY = {
     ],
   },
   "diete-masse": {
-    id: "diete-masse", label: "Prise de masse", emoji: "💪",
+    id: "diete-masse", label: "Prise de masse",
     description: "Surplus calorique contrôlé · Prise de masse propre · 5 repas/jour",
     kcal: "~2800 kcal", protein: "~200g", carbs: "~320g", fat: "~75g",
     plans: [
       {
         id: "dm-j1", label: "Journée A — Classique",
         meals: [
-          { id: "dm-j1-m1", label: "🌅 Petit-déjeuner", notes: "Gros repas matinal pour charger les muscles en glucides dès le réveil. Prépare la veille si besoin.", items: [
+          { id: "dm-j1-m1", label: "Petit-déjeuner", notes: "Gros repas matinal pour charger les muscles en glucides dès le réveil. Prépare la veille si besoin.", items: [
             { id: uid(), name: "Flocons d'avoine", amount: 100, kcal: 370, protein: 13, carbs: 59, fat: 7 },
             { id: uid(), name: "Œuf entier", amount: 150, kcal: 215, protein: 18, carbs: 1, fat: 15 },
             { id: uid(), name: "Blanc d'œuf", amount: 100, kcal: 35, protein: 7.2, carbs: 0.3, fat: 0.1 },
             { id: uid(), name: "Banane", amount: 120, kcal: 107, protein: 1.3, carbs: 27, fat: 0.4 },
             { id: uid(), name: "Beurre de cacahuète", amount: 20, kcal: 118, protein: 5, carbs: 4, fat: 10 },
           ]},
-          { id: "dm-j1-m2", label: "🥤 Shaker pré-workout", notes: "À prendre 45 min avant l'entraînement. Les glucides rapides alimentent l'effort, la whey protège les muscles.", items: [
+          { id: "dm-j1-m2", label: "Shaker pré-workout", notes: "À prendre 45 min avant l'entraînement. Les glucides rapides alimentent l'effort, la whey protège les muscles.", items: [
             { id: uid(), name: "Whey protéine", amount: 40, kcal: 150, protein: 32, carbs: 4, fat: 2 },
             { id: uid(), name: "Banane", amount: 120, kcal: 107, protein: 1.3, carbs: 27, fat: 0.4 },
             { id: uid(), name: "Flocons d'avoine", amount: 30, kcal: 111, protein: 3.9, carbs: 20, fat: 2.1 },
           ]},
-          { id: "dm-j1-m3", label: "☀️ Déjeuner", notes: "Repas post-workout si entraînement le matin. Recette : riz blanc + poulet mariné + légumes vapeur + huile d'olive.", items: [
+          { id: "dm-j1-m3", label: "Déjeuner", notes: "Repas post-workout si entraînement le matin. Recette : riz blanc + poulet mariné + légumes vapeur + huile d'olive.", items: [
             { id: uid(), name: "Blanc de poulet", amount: 250, kcal: 275, protein: 58, carbs: 0, fat: 3 },
             { id: uid(), name: "Riz blanc cuit", amount: 250, kcal: 325, protein: 6, carbs: 71, fat: 0.6 },
             { id: uid(), name: "Brocoli", amount: 150, kcal: 51, protein: 4.2, carbs: 7, fat: 0.5 },
             { id: uid(), name: "Huile d'olive", amount: 15, kcal: 135, protein: 0, carbs: 0, fat: 15 },
           ]},
-          { id: "dm-j1-m4", label: "🥤 Collation après-midi", notes: "Pour maintenir le flux d'acides aminés entre le déjeuner et le dîner. Les amandes ajoutent des graisses saines.", items: [
+          { id: "dm-j1-m4", label: "Collation après-midi", notes: "Pour maintenir le flux d'acides aminés entre le déjeuner et le dîner. Les amandes ajoutent des graisses saines.", items: [
             { id: uid(), name: "Fromage blanc 0%", amount: 200, kcal: 86, protein: 15, carbs: 7, fat: 0 },
             { id: uid(), name: "Amandes", amount: 30, kcal: 174, protein: 6.4, carbs: 3, fat: 15 },
             { id: uid(), name: "Fruits rouges", amount: 100, kcal: 50, protein: 0.7, carbs: 12, fat: 0.3 },
           ]},
-          { id: "dm-j1-m5", label: "🌙 Dîner", notes: "Recette : saumon + patate douce + haricots verts. La caséine du fromage blanc avant le coucher optimise la synthèse protéique nocturne.", items: [
+          { id: "dm-j1-m5", label: "Dîner", notes: "Recette : saumon + patate douce + haricots verts. La caséine du fromage blanc avant le coucher optimise la synthèse protéique nocturne.", items: [
             { id: uid(), name: "Saumon frais", amount: 200, kcal: 416, protein: 40, carbs: 0, fat: 28 },
             { id: uid(), name: "Patate douce cuite", amount: 200, kcal: 172, protein: 3.2, carbs: 40, fat: 0.3 },
             { id: uid(), name: "Haricots verts", amount: 150, kcal: 37, protein: 2.4, carbs: 6, fat: 0.3 },
@@ -265,31 +265,31 @@ const DIET_LIBRARY = {
       {
         id: "dm-j2", label: "Journée B — Haute énergie",
         meals: [
-          { id: "dm-j2-m1", label: "🌅 Petit-déjeuner bulk", notes: "Recette pancakes protéinés : mélange flocons + blancs + 1 œuf + cannelle → cuisson poêle. Sirop d'érable autorisé.", items: [
+          { id: "dm-j2-m1", label: "Petit-déjeuner bulk", notes: "Recette pancakes protéinés : mélange flocons + blancs + 1 œuf + cannelle → cuisson poêle. Sirop d'érable autorisé.", items: [
             { id: uid(), name: "Flocons d'avoine", amount: 100, kcal: 370, protein: 13, carbs: 59, fat: 7 },
             { id: uid(), name: "Blanc d'œuf", amount: 200, kcal: 70, protein: 14.4, carbs: 0.6, fat: 0.2 },
             { id: uid(), name: "Œuf entier", amount: 100, kcal: 143, protein: 12, carbs: 0.7, fat: 10 },
             { id: uid(), name: "Beurre de cacahuète", amount: 30, kcal: 177, protein: 7.4, carbs: 6, fat: 15 },
             { id: uid(), name: "Banane", amount: 100, kcal: 89, protein: 1.1, carbs: 23, fat: 0.3 },
           ]},
-          { id: "dm-j2-m2", label: "🥤 Shaker masse", notes: "Shaker hypercalorique maison. Mixe tout ensemble. Peut remplacer un repas les jours sans appétit.", items: [
+          { id: "dm-j2-m2", label: "Shaker masse", notes: "Shaker hypercalorique maison. Mixe tout ensemble. Peut remplacer un repas les jours sans appétit.", items: [
             { id: uid(), name: "Whey protéine", amount: 40, kcal: 150, protein: 32, carbs: 4, fat: 2 },
             { id: uid(), name: "Flocons d'avoine", amount: 60, kcal: 222, protein: 7.7, carbs: 40, fat: 4.2 },
             { id: uid(), name: "Beurre de cacahuète", amount: 20, kcal: 118, protein: 5, carbs: 4, fat: 10 },
             { id: uid(), name: "Banane", amount: 120, kcal: 107, protein: 1.3, carbs: 27, fat: 0.4 },
           ]},
-          { id: "dm-j2-m3", label: "☀️ Déjeuner", notes: "Recette : bœuf haché extra-lean + pâtes + sauce tomate maison. Cuire les pâtes al dente (index glycémique plus bas).", items: [
+          { id: "dm-j2-m3", label: "Déjeuner", notes: "Recette : bœuf haché extra-lean + pâtes + sauce tomate maison. Cuire les pâtes al dente (index glycémique plus bas).", items: [
             { id: uid(), name: "Bœuf haché 5%", amount: 200, kcal: 210, protein: 40, carbs: 0, fat: 10 },
             { id: uid(), name: "Pâtes cuites", amount: 250, kcal: 330, protein: 11, carbs: 67, fat: 1.5 },
             { id: uid(), name: "Tomate", amount: 150, kcal: 27, protein: 1.3, carbs: 5.2, fat: 0.3 },
             { id: uid(), name: "Huile d'olive", amount: 10, kcal: 90, protein: 0, carbs: 0, fat: 10 },
           ]},
-          { id: "dm-j2-m4", label: "🥤 Collation récupération", notes: "Après l'entraînement ou en milieu d'après-midi. Le mélange whey + skyr assure un flux protéique continu.", items: [
+          { id: "dm-j2-m4", label: "Collation récupération", notes: "Après l'entraînement ou en milieu d'après-midi. Le mélange whey + skyr assure un flux protéique continu.", items: [
             { id: uid(), name: "Whey protéine", amount: 30, kcal: 113, protein: 24, carbs: 3, fat: 1.5 },
             { id: uid(), name: "Skyr nature", amount: 150, kcal: 90, protein: 15, carbs: 6, fat: 0.3 },
             { id: uid(), name: "Fruits rouges", amount: 80, kcal: 40, protein: 0.6, carbs: 10, fat: 0.2 },
           ]},
-          { id: "dm-j2-m5", label: "🌙 Dîner", notes: "Recette : escalope de veau + riz + épinards sautés à l'ail. Fromage blanc 0% avant de dormir pour les caséines.", items: [
+          { id: "dm-j2-m5", label: "Dîner", notes: "Recette : escalope de veau + riz + épinards sautés à l'ail. Fromage blanc 0% avant de dormir pour les caséines.", items: [
             { id: uid(), name: "Veau (escalope)", amount: 200, kcal: 220, protein: 42, carbs: 0, fat: 5 },
             { id: uid(), name: "Riz blanc cuit", amount: 200, kcal: 260, protein: 4.8, carbs: 57, fat: 0.4 },
             { id: uid(), name: "Épinards frais", amount: 150, kcal: 35, protein: 4.3, carbs: 2.1, fat: 0.6 },
@@ -300,28 +300,28 @@ const DIET_LIBRARY = {
       {
         id: "dm-j3", label: "Journée C — Jour de repos",
         meals: [
-          { id: "dm-j3-m1", label: "🌅 Petit-déjeuner léger", notes: "Jour sans entraînement : légèrement moins de glucides mais protéines maintenues. Le skyr rassasie longtemps.", items: [
+          { id: "dm-j3-m1", label: "Petit-déjeuner léger", notes: "Jour sans entraînement : légèrement moins de glucides mais protéines maintenues. Le skyr rassasie longtemps.", items: [
             { id: uid(), name: "Skyr nature", amount: 200, kcal: 120, protein: 20, carbs: 8, fat: 0.4 },
             { id: uid(), name: "Flocons d'avoine", amount: 70, kcal: 259, protein: 9.1, carbs: 48, fat: 4.9 },
             { id: uid(), name: "Amandes", amount: 20, kcal: 116, protein: 4.3, carbs: 2, fat: 10 },
             { id: uid(), name: "Fruits rouges", amount: 100, kcal: 50, protein: 0.7, carbs: 12, fat: 0.3 },
           ]},
-          { id: "dm-j3-m2", label: "🥤 Collation matinale", notes: "Collation légère. Le fromage blanc + fruits rouges est rapide à préparer et facile à emporter.", items: [
+          { id: "dm-j3-m2", label: "Collation matinale", notes: "Collation légère. Le fromage blanc + fruits rouges est rapide à préparer et facile à emporter.", items: [
             { id: uid(), name: "Fromage blanc 0%", amount: 200, kcal: 86, protein: 15, carbs: 7, fat: 0 },
             { id: uid(), name: "Fruits rouges", amount: 100, kcal: 50, protein: 0.7, carbs: 12, fat: 0.3 },
           ]},
-          { id: "dm-j3-m3", label: "☀️ Déjeuner", notes: "Recette : cabillaud en papillote + patate douce + haricots verts. Simple, léger, efficace pour la récupération.", items: [
+          { id: "dm-j3-m3", label: "Déjeuner", notes: "Recette : cabillaud en papillote + patate douce + haricots verts. Simple, léger, efficace pour la récupération.", items: [
             { id: uid(), name: "Cabillaud", amount: 250, kcal: 220, protein: 47.5, carbs: 0, fat: 2 },
             { id: uid(), name: "Patate douce cuite", amount: 200, kcal: 172, protein: 3.2, carbs: 40, fat: 0.3 },
             { id: uid(), name: "Haricots verts", amount: 150, kcal: 37, protein: 2.4, carbs: 6, fat: 0.3 },
             { id: uid(), name: "Huile d'olive", amount: 10, kcal: 90, protein: 0, carbs: 0, fat: 10 },
           ]},
-          { id: "dm-j3-m4", label: "🥤 Collation après-midi", notes: "Les oléagineux + whey maintiennent la synthèse protéique même les jours sans sport.", items: [
+          { id: "dm-j3-m4", label: "Collation après-midi", notes: "Les oléagineux + whey maintiennent la synthèse protéique même les jours sans sport.", items: [
             { id: uid(), name: "Whey protéine", amount: 30, kcal: 113, protein: 24, carbs: 3, fat: 1.5 },
             { id: uid(), name: "Amandes", amount: 30, kcal: 174, protein: 6.4, carbs: 3, fat: 15 },
             { id: uid(), name: "Pomme", amount: 150, kcal: 78, protein: 0.5, carbs: 21, fat: 0.3 },
           ]},
-          { id: "dm-j3-m5", label: "🌙 Dîner", notes: "Recette : saumon + quinoa + épinards. Plus digeste que le riz le soir. Fromage blanc avant coucher = caséine lente.", items: [
+          { id: "dm-j3-m5", label: "Dîner", notes: "Recette : saumon + quinoa + épinards. Plus digeste que le riz le soir. Fromage blanc avant coucher = caséine lente.", items: [
             { id: uid(), name: "Saumon frais", amount: 180, kcal: 374, protein: 36, carbs: 0, fat: 25 },
             { id: uid(), name: "Quinoa cuit", amount: 150, kcal: 180, protein: 6.6, carbs: 32, fat: 3 },
             { id: uid(), name: "Épinards frais", amount: 150, kcal: 35, protein: 4.3, carbs: 2.1, fat: 0.6 },
@@ -1638,10 +1638,10 @@ function ProgramsSection({ onApplyToStudent, students, onApplyDiet }) {
 
       {tab === "diets" && (
         <>
-          <div className="program-switch">{Object.values(DIET_LIBRARY).map((d) => <button key={d.id} className={`chip-btn lg ${dietId === d.id ? "active" : ""}`} onClick={() => { setDietId(d.id); setOpenPlan(null); }}>{d.emoji} {d.label}</button>)}</div>
+          <div className="program-switch">{Object.values(DIET_LIBRARY).map((d) => <button key={d.id} className={`chip-btn lg ${dietId === d.id ? "active" : ""}`} onClick={() => { setDietId(d.id); setOpenPlan(null); }}>{d.label}</button>)}</div>
           <div className="diet-lib-banner">
             <div className="dlb-meta"><span className="dlb-label">{diet.description}</span></div>
-            <div className="dlb-macros"><span className="dlb-chip mono">{diet.kcal}</span><span className="dlb-chip mono">P {diet.protein}</span><span className="dlb-chip mono">G {diet.carbs}</span><span className="dlb-chip mono">L {diet.fat}</span></div>
+            <div className="dlb-macros"><span className="dlb-chip mono">{diet.kcal}</span><span className="dlb-chip mono">Protéines {diet.protein}</span><span className="dlb-chip mono">Glucides {diet.carbs}</span><span className="dlb-chip mono">Lipides {diet.fat}</span></div>
           </div>
           <div className="program-sessions">
             {diet.plans.map((plan) => {
@@ -2037,18 +2037,18 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .lib-tabs{display:flex;gap:8px;margin-bottom:16px}
 .lib-tab-btn{display:flex;align-items:center;gap:7px;padding:9px 18px;border-radius:var(--r-sm);background:var(--bg-2);border:1px solid var(--line);color:var(--txt-3);font-size:13.5px;font-weight:500;cursor:pointer;transition:.15s}
 .lib-tab-btn.active{background:var(--bg-3);border-color:var(--line-2);color:var(--txt)}
-.diet-lib-banner{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:14px 16px;margin-bottom:12px;display:flex;flex-direction:column;gap:10px}
-.dlb-label{font-size:13px;color:var(--txt-2)}
+.diet-lib-banner{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:16px;margin-bottom:16px;display:flex;flex-direction:column;gap:12px}
+.dlb-label{font-size:13px;color:var(--txt-2);font-weight:500}
 .dlb-macros{display:flex;gap:8px;flex-wrap:wrap}
-.dlb-chip{font-size:11.5px;background:var(--bg-3);border:1px solid var(--line);border-radius:6px;padding:3px 9px;color:var(--acid)}
-.diet-plan-meals{display:flex;flex-direction:column;gap:14px;margin-top:14px}
-.dpm-meal{background:var(--bg-2);border-radius:var(--r-sm);padding:14px}
-.dpm-meal-head{font-weight:600;font-size:13.5px;margin-bottom:6px}
-.dpm-notes{font-size:12px;color:var(--txt-3);margin:0 0 10px;line-height:1.5;font-style:italic;border-left:2px solid var(--acid-dim);padding-left:10px}
-.dpm-items{display:flex;flex-direction:column;gap:5px}
-.dpm-item{display:flex;align-items:center;gap:10px;font-size:13px}
+.dlb-chip{font-size:11px;background:var(--bg-3);border:1px solid var(--line-2);border-radius:6px;padding:4px 10px;color:var(--acid);letter-spacing:.02em}
+.diet-plan-meals{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+.dpm-meal{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:0;overflow:hidden}
+.dpm-meal-head{font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);padding:10px 14px;background:var(--bg-3);border-bottom:1px solid var(--line)}
+.dpm-notes{font-size:12px;color:var(--txt-3);margin:0;padding:10px 14px 8px;line-height:1.5;border-bottom:1px solid var(--line)}
+.dpm-items{display:flex;flex-direction:column;padding:8px 14px 12px}
+.dpm-item{display:flex;align-items:center;gap:0;font-size:13px;padding:5px 0;border-bottom:1px solid var(--line)}
 .dpm-item-name{flex:1;color:var(--txt)}
-.dpm-item-amount{color:var(--txt-3);min-width:40px}
-.dpm-item-kcal{color:var(--txt-4);min-width:60px;text-align:right}
+.dpm-item-amount{color:var(--txt-2);min-width:52px;text-align:right;padding-right:10px;font-size:12.5px}
+.dpm-item-kcal{color:var(--txt-4);min-width:68px;text-align:right;font-size:12px}.dpm-item:last-child{border-bottom:none}
 }
 `;
