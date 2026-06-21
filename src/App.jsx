@@ -56,10 +56,12 @@ function formatDate(iso) { const d = new Date(iso + "T00:00:00"); return d.toLoc
 function formatTime(ts) { return new Date(ts).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); }
 function initials(name) { return (name || "?").split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join(""); }
 
-function newStudent({ name, sex, height, weight, age }) {
+function newStudent({ name, sex, height, weight, age, sessionsPerWeek, mealsPerDay }) {
   const id = uid();
   return {
     id, name, sex, age: age || "", height: height || "",
+    sessionsPerWeek: sessionsPerWeek || "",
+    mealsPerDay: mealsPerDay || "",
     weightHistory: weight ? [{ date: todayISO(), value: Number(weight) }] : [],
     training: { planName: "", days: [] },
     diet: { planName: "", calories: "", protein: "", carbs: "", fat: "", meals: [] },
@@ -292,9 +294,10 @@ export default function CoachApp() {
   useEffect(() => {
     function resolve() {
       const hash = window.location.hash || "";
-      const m = hash.match(/student=([a-z0-9]+)/i);
-      if (m) setRoute({ view: "student-portal", studentId: m[1] });
-      else setRoute({ view: "coach" });
+      const mStudent = hash.match(/student=([a-z0-9]+)/i);
+      if (mStudent) { setRoute({ view: "student-portal", studentId: mStudent[1] }); return; }
+      if (hash === "#join") { setRoute({ view: "onboarding" }); return; }
+      setRoute({ view: "coach" });
     }
     resolve();
     window.addEventListener("hashchange", resolve);
@@ -311,6 +314,7 @@ export default function CoachApp() {
 
   if (route.view === "loading") return <Shell><LoadingState /></Shell>;
   if (route.view === "student-portal") return <Shell><StudentPortal studentId={route.studentId} /></Shell>;
+  if (route.view === "onboarding") return <Shell><OnboardingPage /></Shell>;
   return <Shell><CoachApp_Inner students={students} refreshIndex={loadIndex} /></Shell>;
 }
 
@@ -443,6 +447,11 @@ function Sidebar({ section, setSection, studentCount, isMobile, navOpen, setNavO
 function TopBar({ section, query, setQuery, onAdd, isMobile, onMenu }) {
   const titles = { dashboard: "Tableau de bord", students: "Élèves", programs: "Programmes", planning: "Planning", stats: "Statistiques" };
   const today = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  const [copied, setCopied] = useState(false);
+  function copyJoinLink() {
+    const link = `${window.location.origin}${window.location.pathname}#join`;
+    navigator.clipboard.writeText(link).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+  }
   return (
     <header className="topbar">
       {isMobile && <button className="icon-btn menu-btn" onClick={onMenu} aria-label="Menu"><Menu size={19} /></button>}
@@ -451,6 +460,7 @@ function TopBar({ section, query, setQuery, onAdd, isMobile, onMenu }) {
       {section === "students" && (
         <>
           <div className="search"><Search size={15} /><input placeholder={isMobile ? "Rechercher…" : "Rechercher un élève…"} value={query} onChange={(e) => setQuery(e.target.value)} /></div>
+          <button className="btn ghost" onClick={copyJoinLink}>{copied ? <Check size={14} /> : <Link2 size={14} />}{copied ? "Copié !" : "Lien d'inscription"}</button>
           {!isMobile && <button className="btn primary" onClick={onAdd}><Plus size={15} strokeWidth={2.4} />Élève</button>}
         </>
       )}
@@ -539,6 +549,79 @@ function StudentCard({ student, onClick }) {
         </div>
       </div>
     </button>
+  );
+}
+
+function OnboardingPage() {
+  const [step, setStep] = useState("form");
+  const [name, setName] = useState("");
+  const [sex, setSex] = useState("H");
+  const [age, setAge] = useState("");
+  const [height, setHeight] = useState("");
+  const [weight, setWeight] = useState("");
+  const [sessions, setSessions] = useState("");
+  const [meals, setMeals] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit() {
+    if (!name.trim() || !age || !height || !weight) { setError("Remplis au minimum ton prénom, âge, taille et poids."); return; }
+    setSaving(true);
+    setError("");
+    try {
+      const student = newStudent({ name: name.trim(), sex, age, height, weight, sessionsPerWeek: sessions, mealsPerDay: meals });
+      const idx = (await safeGet(KEYS.students)) || [];
+      await safeSet(KEYS.students, [...idx, { id: student.id, name: student.name, sex: student.sex, createdAt: student.createdAt }]);
+      await safeSet(KEYS.student(student.id), student);
+      setStep("done");
+    } catch (e) {
+      setError("Une erreur est survenue. Réessaie.");
+    }
+    setSaving(false);
+  }
+
+  if (step === "done") return (
+    <div className="onboarding-wrap">
+      <div className="onboarding-card">
+        <div className="onboarding-logo"><div className="mark" /><span className="brand-name">Fonte</span></div>
+        <div className="onboarding-success">
+          <Check size={40} color="var(--acid)" strokeWidth={2.5} />
+          <h2>C'est enregistré !</h2>
+          <p className="muted">Ton coach a bien reçu tes informations. Tu vas être ajouté(e) à son suivi très prochainement.</p>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="onboarding-wrap">
+      <div className="onboarding-card">
+        <div className="onboarding-logo"><div className="mark" /><span className="brand-name">Fonte</span></div>
+        <h2 className="onboarding-title">Rejoindre le programme</h2>
+        <p className="muted" style={{ marginBottom: 24 }}>Remplis ce formulaire pour que ton coach puisse créer ta fiche de suivi.</p>
+        <div className="modal-form">
+          <label className="field"><span>Prénom &amp; Nom *</span><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ton prénom et nom" /></label>
+          <label className="field"><span>Sexe</span>
+            <select value={sex} onChange={(e) => setSex(e.target.value)}>
+              <option value="H">Homme</option>
+              <option value="F">Femme</option>
+              <option value="Autre">Autre</option>
+            </select>
+          </label>
+          <div className="field-row">
+            <label className="field"><span>Âge *</span><input type="number" value={age} onChange={(e) => setAge(e.target.value)} placeholder="ex. 25" /></label>
+            <label className="field"><span>Taille (cm) *</span><input type="number" value={height} onChange={(e) => setHeight(e.target.value)} placeholder="ex. 175" /></label>
+            <label className="field"><span>Poids (kg) *</span><input type="number" step="0.1" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="ex. 75" /></label>
+          </div>
+          <div className="field-row">
+            <label className="field"><span>Séances / semaine</span><input type="number" min="1" max="7" value={sessions} onChange={(e) => setSessions(e.target.value)} placeholder="ex. 3" /></label>
+            <label className="field"><span>Repas / jour</span><input type="number" min="1" max="8" value={meals} onChange={(e) => setMeals(e.target.value)} placeholder="ex. 3" /></label>
+          </div>
+          {error && <p className="onboarding-error">{error}</p>}
+          <button className="btn primary full" onClick={submit} disabled={saving}>{saving ? "Envoi en cours…" : "Rejoindre"}</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1506,5 +1589,14 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .chat-bubble{max-width:86%}
 .empty-state{padding:48px 20px}
 .day-label-input{font-size:13px}
+.onboarding-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--bg)}
+.onboarding-card{width:100%;max-width:480px;background:var(--bg-1);border:1px solid var(--line);border-radius:var(--r);padding:36px 32px}
+.onboarding-logo{display:flex;align-items:center;gap:10px;margin-bottom:28px}
+.onboarding-logo .brand-name{font-family:'Oswald';font-size:22px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--txt)}
+.onboarding-title{font-family:'Oswald';text-transform:uppercase;font-size:20px;font-weight:600;margin:0 0 6px}
+.onboarding-success{display:flex;flex-direction:column;align-items:center;gap:16px;padding:24px 0;text-align:center}
+.onboarding-success h2{font-family:'Oswald';text-transform:uppercase;font-size:22px;margin:0}
+.onboarding-error{color:var(--red);font-size:13px;margin:0}
+@media(max-width:480px){.onboarding-card{padding:28px 20px}}
 }
 `;
