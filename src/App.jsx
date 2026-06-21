@@ -519,19 +519,8 @@ export default function CoachApp() {
     function resolve() {
       const hash = window.location.hash || "";
       const mStudent = hash.match(/student=([a-z0-9]+)/i);
-      if (mStudent) {
-        localStorage.setItem("student_id", mStudent[1]);
-        setRoute({ view: "student-portal", studentId: mStudent[1] });
-        return;
-      }
+      if (mStudent) { setRoute({ view: "student-portal", studentId: mStudent[1] }); return; }
       if (hash === "#join") { setRoute({ view: "onboarding" }); return; }
-      if (hash === "#coach") { setRoute({ view: "coach" }); return; }
-      // PWA launch sans hash : rediriger vers le portail si l'élève a déjà visité son lien
-      const savedStudentId = localStorage.getItem("student_id");
-      if (savedStudentId) {
-        setRoute({ view: "student-portal", studentId: savedStudentId });
-        return;
-      }
       setRoute({ view: "coach" });
     }
     resolve();
