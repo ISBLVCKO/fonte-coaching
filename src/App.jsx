@@ -1223,6 +1223,7 @@ function ProgramsSection({ onApplyToStudent }) {
 
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .fonte-shell{--bg:#15161A;--bg-1:#1B1D22;--bg-2:#212329;--bg-3:#282A31;--line:#2E3037;--line-2:#3A3D45;--txt:#F2F2EF;--txt-2:#B7B5AD;--txt-3:#807E76;--txt-4:#5C5A53;--acid:#C8FF4D;--acid-dim:#9BC23A;--red:#E8543F;--metal-1:#34373F;--metal-2:#23252B;--r:14px;--r-sm:9px;--sidebar-w:220px;background:var(--bg);color:var(--txt);font-family:'Archivo',system-ui,sans-serif;font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;min-height:100vh;width:100%}
 .fonte-shell *{box-sizing:border-box}
 .fonte-shell button,.fonte-shell input,.fonte-shell select,.fonte-shell textarea{font-family:inherit}
