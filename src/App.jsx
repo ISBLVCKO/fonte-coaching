@@ -756,19 +756,30 @@ function TopBar({ section, query, setQuery, onAdd, isMobile, onMenu }) {
 }
 
 function DashboardSection({ students, onOpenStudent }) {
+  const [fullStudents, setFullStudents] = useState([]);
+  useEffect(() => {
+    if (!students.length) { setFullStudents([]); return; }
+    Promise.all(students.map((s) => safeGet(KEYS.student(s.id)))).then((res) => setFullStudents(res.filter(Boolean)));
+  }, [students]);
+
   const total = students.length;
+  const withProgram = fullStudents.filter((s) => s.training?.days?.length > 0).length;
+  const withDiet = fullStudents.filter((s) => s.diet?.meals?.length > 0).length;
+
   return (
     <div className="layout">
       <div>
         <div className="kpis">
           <Kpi label="Élèves actifs" icon={<Users size={14} />} num={total} unit="" />
-          <Kpi label="Avec programme" icon={<Dumbbell size={14} />} num="—" unit="" />
-          <Kpi label="Avec diète" icon={<Apple size={14} />} num="—" unit="" />
+          <Kpi label="Avec programme" icon={<Dumbbell size={14} />} num={withProgram} unit={`/${total || 0}`} />
+          <Kpi label="Avec diète" icon={<Apple size={14} />} num={withDiet} unit={`/${total || 0}`} />
           <Kpi label="Messages non lus" icon={<MessageCircle size={14} />} num="—" unit="" />
         </div>
         <div className="sec-head"><h2>Élèves récents</h2><span className="ct mono">{total} au total</span></div>
         {total === 0 ? <p className="muted">Aucun élève pour l'instant. Ajoute ta première fiche depuis la section Élèves.</p> : (
-          <div className="roster">{students.slice().sort((a, b) => b.createdAt - a.createdAt).slice(0, 6).map((s) => <StudentCard key={s.id} student={s} onClick={() => onOpenStudent(s.id)} />)}</div>
+          <div className="roster">{fullStudents.slice().sort((a, b) => b.createdAt - a.createdAt).slice(0, 6).map((s) => (
+            <StudentCard key={s.id} student={s} onClick={() => onOpenStudent(s.id)} />
+          ))}</div>
         )}
       </div>
       <div>
