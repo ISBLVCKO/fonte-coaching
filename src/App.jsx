@@ -303,13 +303,25 @@ function useIsMobile() {
 export default function CoachApp() {
   const [route, setRoute] = useState({ view: "loading" });
   const [students, setStudents] = useState([]);
+  const [coachUnlocked, setCoachUnlocked] = useState(() => sessionStorage.getItem("coach_auth") === "1");
 
   useEffect(() => {
     function resolve() {
       const hash = window.location.hash || "";
       const mStudent = hash.match(/student=([a-z0-9]+)/i);
-      if (mStudent) { setRoute({ view: "student-portal", studentId: mStudent[1] }); return; }
+      if (mStudent) {
+        localStorage.setItem("student_id", mStudent[1]);
+        setRoute({ view: "student-portal", studentId: mStudent[1] });
+        return;
+      }
       if (hash === "#join") { setRoute({ view: "onboarding" }); return; }
+      if (hash === "#coach") { setRoute({ view: "coach" }); return; }
+      // PWA launch sans hash : rediriger vers le portail si l'élève a déjà visité son lien
+      const savedStudentId = localStorage.getItem("student_id");
+      if (savedStudentId) {
+        setRoute({ view: "student-portal", studentId: savedStudentId });
+        return;
+      }
       setRoute({ view: "coach" });
     }
     resolve();
@@ -328,7 +340,44 @@ export default function CoachApp() {
   if (route.view === "loading") return <Shell><LoadingState /></Shell>;
   if (route.view === "student-portal") return <Shell><StudentPortal studentId={route.studentId} /></Shell>;
   if (route.view === "onboarding") return <Shell><OnboardingPage /></Shell>;
+  if (!coachUnlocked) return <Shell><CoachPinGate onUnlock={() => { sessionStorage.setItem("coach_auth","1"); setCoachUnlocked(true); }} /></Shell>;
   return <Shell><CoachApp_Inner students={students} refreshIndex={loadIndex} /></Shell>;
+}
+
+const COACH_PIN = "1234";
+
+function CoachPinGate({ onUnlock }) {
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState(false);
+  function tryPin(val) {
+    setPin(val);
+    if (val.length === 4) {
+      if (val === COACH_PIN) { onUnlock(); }
+      else { setError(true); setTimeout(() => { setPin(""); setError(false); }, 700); }
+    } else {
+      setError(false);
+    }
+  }
+  return (
+    <div className="pin-gate">
+      <div className="pin-card">
+        <div className="pin-logo"><div className="mark" /><span className="brand-name">Fonte</span></div>
+        <p className="pin-label">Code coach</p>
+        <div className={`pin-dots ${error ? "shake" : ""}`}>
+          {[0,1,2,3].map((i) => <div key={i} className={`pin-dot ${pin.length > i ? "filled" : ""} ${error ? "err" : ""}`} />)}
+        </div>
+        <div className="pin-grid">
+          {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((k, i) => (
+            <button key={i} className={`pin-key ${k === "" ? "invisible" : ""}`} onClick={() => {
+              if (k === "⌫") tryPin(pin.slice(0,-1));
+              else if (k !== "" && pin.length < 4) tryPin(pin + k);
+            }}>{k}</button>
+          ))}
+        </div>
+        <a className="pin-student-link" onClick={() => { const id = prompt("Entre ton ID élève (fourni par ton coach) :"); if (id?.trim()) { localStorage.setItem("student_id", id.trim()); window.location.hash = `student=${id.trim()}`; } }}>Je suis un élève →</a>
+      </div>
+    </div>
+  );
 }
 
 function LoadingState() {
@@ -1517,7 +1566,7 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .card{background:var(--bg-1);border:1px solid var(--line);border-radius:var(--r);padding:15px;display:flex;gap:13px;align-items:center;cursor:pointer;transition:.15s;text-align:left;width:100%}
 .card:hover{border-color:var(--line-2);background:var(--bg-2);transform:translateY(-1px)}
 .card .meta{min-width:0;flex:1}
-.card .nm{font-family:'Oswald';text-transform:uppercase;font-weight:600;font-size:15.5px;letter-spacing:.02em;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .nm{font-family:'Oswald';text-transform:uppercase;font-weight:600;font-size:15.5px;letter-spacing:.02em;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--txt)}
 .card .prog-nm{font-size:12.5px;color:var(--txt-2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card .row{display:flex;gap:18px;margin-top:10px}
 .card .stat .k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--txt-4);font-weight:500}
@@ -1676,5 +1725,23 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .sp-nav-btn.active svg{filter:drop-shadow(0 0 6px #C8FF4D55)}
 .sp-nav-dot{position:absolute;top:10px;right:calc(50% - 16px);width:6px;height:6px;border-radius:50%;background:var(--acid);display:none}
 .sp-nav-btn:last-child .sp-nav-dot{display:block}
+.pin-gate{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:24px}
+.pin-card{width:100%;max-width:320px;display:flex;flex-direction:column;align-items:center;gap:24px}
+.pin-logo{display:flex;align-items:center;gap:10px}
+.pin-logo .brand-name{font-family:'Oswald';font-size:24px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--txt)}
+.pin-label{font-size:13px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.1em;margin:0}
+.pin-dots{display:flex;gap:16px}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--line-2);transition:.15s}
+.pin-dot.filled{background:var(--acid);border-color:var(--acid)}
+.pin-dot.err{background:var(--red);border-color:var(--red)}
+.pin-dots.shake{animation:shake .35s ease}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+.pin-grid{display:grid;grid-template-columns:repeat(3,72px);gap:10px}
+.pin-key{width:72px;height:72px;border-radius:50%;background:var(--bg-2);border:1px solid var(--line);font-family:'Oswald';font-size:22px;font-weight:500;color:var(--txt);cursor:pointer;transition:.1s;display:flex;align-items:center;justify-content:center}
+.pin-key:hover{background:var(--bg-3)}
+.pin-key:active{transform:scale(.92)}
+.pin-key.invisible{visibility:hidden;pointer-events:none}
+.pin-student-link{font-size:12px;color:var(--txt-4);cursor:pointer;text-decoration:none;margin-top:4px}
+.pin-student-link:hover{color:var(--txt-2)}
 }
 `;
