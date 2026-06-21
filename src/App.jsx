@@ -801,7 +801,12 @@ function Kpi({ label, icon, num, unit }) {
 }
 
 function StudentsSection({ students, query, onOpenStudent, onAdd }) {
-  const filtered = students.filter((s) => s.name.toLowerCase().includes(query.toLowerCase()));
+  const [fullStudents, setFullStudents] = useState([]);
+  useEffect(() => {
+    if (!students.length) { setFullStudents([]); return; }
+    Promise.all(students.map((s) => safeGet(KEYS.student(s.id)))).then((res) => setFullStudents(res.filter(Boolean)));
+  }, [students]);
+  const filtered = fullStudents.filter((s) => s.name.toLowerCase().includes(query.toLowerCase()));
   if (students.length === 0) return (
     <div className="empty-state">
       <div className="empty-plate"><Dumbbell size={30} strokeWidth={1.5} /></div>
@@ -835,15 +840,22 @@ function Plate({ name, size = 64 }) {
 }
 
 function StudentCard({ student, onClick }) {
+  const hasTraining = student.training?.days?.length > 0;
+  const hasDiet = student.diet?.meals?.length > 0;
+  const lastWeight = student.weightHistory?.length ? student.weightHistory[student.weightHistory.length - 1].value : null;
   return (
     <button className="card" onClick={onClick}>
       <Plate name={student.name} size={60} />
       <div className="meta">
         <div className="nm">{student.name}</div>
-        <div className="prog-nm">{student.training?.planName || "Pas encore de programme"}</div>
+        <div className="card-indicators">
+          <span className={`card-badge ${hasTraining ? "ok" : "empty"}`}><Dumbbell size={11} />{hasTraining ? student.training.planName || "Programme" : "Sans programme"}</span>
+          <span className={`card-badge ${hasDiet ? "ok" : "empty"}`}><Apple size={11} />{hasDiet ? student.diet.planName || "Diète" : "Sans diète"}</span>
+        </div>
         <div className="row">
-          <div className="stat"><div className="k">Sexe</div><div className="v">{student.sex || "—"}</div></div>
-          <div className="stat"><div className="k">Poids</div><div className="v">{student.weightHistory?.length ? `${student.weightHistory[student.weightHistory.length - 1].value}kg` : "—"}</div></div>
+          <div className="stat"><div className="k">Sexe</div><div className="v" style={{color:"var(--txt)"}}>{student.sex || "—"}</div></div>
+          <div className="stat"><div className="k">Poids</div><div className="v" style={{color:"var(--txt)"}}>{lastWeight ? `${lastWeight} kg` : "—"}</div></div>
+          <div className="stat"><div className="k">Âge</div><div className="v" style={{color:"var(--txt)"}}>{student.age ? `${student.age} ans` : "—"}</div></div>
         </div>
       </div>
     </button>
@@ -1343,6 +1355,11 @@ function StudentPortal({ studentId }) {
             {lastWeight && <span className="pill mono">{lastWeight} kg</span>}
           </div>
         </div>
+        <nav className="sp-tabs-desktop">
+          <button className={`sp-tab-btn ${tab === "entrainement" ? "active" : ""}`} onClick={() => setTab("entrainement")}><Dumbbell size={15} />Entraînement{training.days.length > 0 && <span className="sp-tab-dot" />}</button>
+          <button className={`sp-tab-btn ${tab === "diete" ? "active" : ""}`} onClick={() => setTab("diete")}><Apple size={15} />Diète{diet.meals.length > 0 && <span className="sp-tab-dot" />}</button>
+          <button className={`sp-tab-btn ${tab === "chat" ? "active" : ""}`} onClick={() => setTab("chat")}><MessageCircle size={15} />Mon coach</button>
+        </nav>
       </header>
 
       <div className="sp-content">
@@ -1885,7 +1902,7 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .card:hover{border-color:var(--line-2);background:var(--bg-2);transform:translateY(-1px)}
 .card .meta{min-width:0;flex:1}
 .card .nm{font-family:'Oswald';text-transform:uppercase;font-weight:600;font-size:15.5px;letter-spacing:.02em;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--txt)}
-.card .prog-nm{font-size:12.5px;color:var(--txt-2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-indicators{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}.card-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 7px;border-radius:5px;font-weight:500;white-space:nowrap}.card-badge.ok{background:rgba(200,255,77,0.12);color:var(--acid)}.card-badge.empty{background:var(--bg-3);color:var(--txt-4)}
 .card .row{display:flex;gap:18px;margin-top:10px}
 .card .stat .k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--txt-4);font-weight:500}
 .card .stat .v{font-family:'JetBrains Mono';font-size:13px;font-weight:600;margin-top:1px}
@@ -2026,20 +2043,20 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .ob-waiting{font-size:13px;color:var(--txt-3);margin:0}
 .onboarding-error{color:var(--red);font-size:13px;margin:0}
 @media(max-width:480px){.onboarding-card{padding:28px 20px}}
-.sp-root{display:flex;flex-direction:column;height:100vh;height:100dvh;background:var(--bg);overflow:hidden}
-.sp-header{background:var(--bg-1);border-bottom:1px solid var(--line);padding:calc(env(safe-area-inset-top) + 14px) 20px 14px;flex:none}
-.sp-header-inner{display:flex;align-items:center;gap:14px}
+.sp-root{display:flex;flex-direction:column;height:100vh;height:100dvh;background:var(--bg);overflow:hidden}.sp-root *{box-sizing:border-box}
+.sp-header{background:var(--bg-1);border-bottom:1px solid var(--line);padding:calc(env(safe-area-inset-top) + 14px) 20px 0;flex:none}
+.sp-header-inner{display:flex;align-items:center;gap:14px;padding-bottom:14px;max-width:760px;margin:0 auto;width:100%}
 .sp-header-text{flex:1;min-width:0}
 .sp-greeting{font-size:11px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.06em;font-family:'Oswald'}
 .sp-name{font-family:'Oswald';font-size:20px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sp-pills{display:flex;gap:6px;flex-wrap:wrap}
-.sp-content{flex:1;overflow-y:auto;padding:16px}
+.sp-content{flex:1;overflow-y:auto;padding:16px}.sp-content .panel-stack{max-width:760px;margin:0 auto}
 .sp-plan-banner{display:flex;align-items:center;gap:10px;font-family:'Oswald';font-size:15px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;color:var(--txt-2);padding:10px 14px;background:var(--bg-2);border-radius:var(--r-sm);margin-bottom:4px}
 .sp-empty-tab{display:flex;flex-direction:column;align-items:center;gap:14px;padding:60px 20px;text-align:center;color:var(--txt-3)}
 .sp-empty-tab p{margin:0;font-size:14px;line-height:1.6}
-.sp-bottom-nav{display:flex;background:var(--bg-1);border-top:1px solid var(--line);flex:none;padding-bottom:env(safe-area-inset-bottom)}
-.sp-nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:12px 8px;background:none;border:none;cursor:pointer;color:var(--txt-4);font-size:11px;font-weight:500;letter-spacing:.02em;position:relative;transition:color .15s}
-.sp-nav-btn.active{color:var(--acid)}
+.sp-tabs-desktop{display:flex;gap:4px;max-width:760px;margin:0 auto;width:100%;padding-top:4px}.sp-tab-btn{display:flex;align-items:center;gap:7px;padding:10px 16px;background:none;border:none;border-bottom:2px solid transparent;color:var(--txt-3);font-size:13.5px;font-weight:500;cursor:pointer;position:relative;transition:.15s}.sp-tab-btn.active{color:var(--acid);border-bottom-color:var(--acid)}.sp-tab-btn svg{flex:none}.sp-tab-dot{width:6px;height:6px;border-radius:50%;background:var(--acid);margin-left:2px}.sp-bottom-nav{display:flex;background:var(--bg-1);border-top:1px solid var(--line);flex:none;padding-bottom:env(safe-area-inset-bottom)}@media(min-width:600px){.sp-bottom-nav{display:none}.sp-tabs-desktop{display:flex}}@media(max-width:599px){.sp-tabs-desktop{display:none}}
+.sp-nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:12px 8px;background:none;border:none;cursor:pointer;color:var(--txt-4);font-size:11px;font-weight:500;letter-spacing:.02em;position:relative;transition:color .15s;-webkit-tap-highlight-color:transparent}
+.sp-nav-btn.active{color:var(--acid)}.sp-nav-btn svg,.sp-tab-btn svg{display:block}
 .sp-nav-btn.active svg{filter:drop-shadow(0 0 6px #C8FF4D55)}
 .sp-nav-dot{position:absolute;top:10px;right:calc(50% - 16px);width:6px;height:6px;border-radius:50%;background:var(--acid);display:none}
 .sp-nav-btn:last-child .sp-nav-dot{display:block}
