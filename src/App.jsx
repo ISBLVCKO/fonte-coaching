@@ -583,7 +583,7 @@ function CoachPinGate({ onUnlock }) {
             }}>{k}</button>
           ))}
         </div>
-        <a className="pin-student-link" onClick={() => { const id = prompt("Entre ton ID élève (fourni par ton coach) :"); if (id?.trim()) { localStorage.setItem("student_id", id.trim()); window.location.hash = `student=${id.trim()}`; } }}>Je suis un élève →</a>
+        <p className="pin-student-hint">Tu es un élève ? Ouvre le lien<br/>que ton coach t'a envoyé.</p>
       </div>
     </div>
   );
@@ -2032,8 +2032,8 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .pin-key:hover{background:var(--bg-3)}
 .pin-key:active{transform:scale(.92)}
 .pin-key.invisible{visibility:hidden;pointer-events:none}
-.pin-student-link{font-size:12px;color:var(--txt-4);cursor:pointer;text-decoration:none;margin-top:4px}
-.pin-student-link:hover{color:var(--txt-2)}
+.pin-student-hint{font-size:12px;color:var(--txt-4);text-align:center;line-height:1.6;margin:0}
+
 .lib-tabs{display:flex;gap:8px;margin-bottom:16px}
 .lib-tab-btn{display:flex;align-items:center;gap:7px;padding:9px 18px;border-radius:var(--r-sm);background:var(--bg-2);border:1px solid var(--line);color:var(--txt-3);font-size:13.5px;font-weight:500;cursor:pointer;transition:.15s}
 .lib-tab-btn.active{background:var(--bg-3);border-color:var(--line-2);color:var(--txt)}
