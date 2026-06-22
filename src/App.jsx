@@ -61,6 +61,7 @@ const KEYS = {
 };
 
 function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); }
+function secureToken() { return crypto.randomUUID().replace(/-/g, ""); }
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 function formatDate(iso) { const d = new Date(iso + "T00:00:00"); return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }); }
 function formatTime(ts) { return new Date(ts).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); }
@@ -72,7 +73,7 @@ function newStudent({ name, sex, height, weight, age, sessionsPerWeek, mealsPerD
     id, name, sex, age: age || "", height: height || "",
     sessionsPerWeek: sessionsPerWeek || "",
     mealsPerDay: mealsPerDay || "",
-    accessToken: uid() + uid(),
+    accessToken: secureToken(),
     weightHistory: weight ? [{ date: todayISO(), value: Number(weight) }] : [],
     training: { planName: "", days: [] },
     diet: { planName: "", calories: "", protein: "", carbs: "", fat: "", meals: [] },
@@ -713,9 +714,18 @@ function ApplySessionModal({ session, students, onClose, onApply }) {
 }
 
 function Sidebar({ section, setSection, studentCount, isMobile, navOpen, setNavOpen }) {
-  function logout() {
+  async function logout() {
+    const token = sessionStorage.getItem("coach_token");
     sessionStorage.removeItem("coach_auth");
     sessionStorage.removeItem("coach_token");
+    if (token) {
+      try {
+        await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+          method: "POST",
+          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` },
+        });
+      } catch {}
+    }
     window.location.reload();
   }
   const content = (
@@ -892,7 +902,10 @@ function OnboardingPage() {
   const [error, setError] = useState("");
 
   async function submit() {
-    if (!name.trim() || !age || !height || !weight) { setError("Remplis au minimum ton prénom, âge, taille et poids."); return; }
+    if (!name.trim() || name.trim().length > 100) { setError("Prénom invalide (1-100 caractères)."); return; }
+    if (!age || isNaN(age) || age < 10 || age > 100) { setError("Âge invalide (entre 10 et 100 ans)."); return; }
+    if (!height || isNaN(height) || height < 100 || height > 250) { setError("Taille invalide (entre 100 et 250 cm)."); return; }
+    if (!weight || isNaN(weight) || weight < 20 || weight > 300) { setError("Poids invalide (entre 20 et 300 kg)."); return; }
     setSaving(true);
     setError("");
     try {
@@ -1317,7 +1330,16 @@ function ChatPanel({ studentId, sender }) {
   const bottomRef = useRef(null);
   const pollRef = useRef(null);
   const load = useCallback(async () => { const m = (await safeGet(KEYS.chat(studentId))) || []; setMessages(m); setLoaded(true); }, [studentId]);
-  useEffect(() => { load(); pollRef.current = setInterval(load, 3000); return () => clearInterval(pollRef.current); }, [load]);
+  useEffect(() => {
+    load();
+    pollRef.current = setInterval(load, 5000);
+    function handleVisibility() {
+      if (document.hidden) { clearInterval(pollRef.current); pollRef.current = null; }
+      else { load(); pollRef.current = setInterval(load, 5000); }
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => { clearInterval(pollRef.current); document.removeEventListener("visibilitychange", handleVisibility); };
+  }, [load]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages.length]);
   async function send() {
     if (!text.trim()) return;
