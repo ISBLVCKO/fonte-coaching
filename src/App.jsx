@@ -529,8 +529,8 @@ export default function CoachApp() {
   useEffect(() => {
     function resolve() {
       const hash = window.location.hash || "";
-      const mStudent = hash.match(/student=([a-z0-9]+)\.([a-z0-9]+)/i);
-      if (mStudent) { setRoute({ view: "student-portal", studentId: mStudent[1], token: mStudent[2] }); return; }
+      const mStudent = hash.match(/student=([a-z0-9]+)(?:\.([a-z0-9]+))?/i);
+      if (mStudent) { setRoute({ view: "student-portal", studentId: mStudent[1], token: mStudent[2] || "" }); return; }
       if (hash === "#join") { setRoute({ view: "onboarding" }); return; }
       setRoute({ view: "coach" });
     }
@@ -1355,7 +1355,7 @@ function StudentPortal({ studentId, token }) {
   const load = useCallback(async () => {
     const s = await safeGet(KEYS.student(studentId));
     if (!s) { setNotFound(true); return; }
-    if (s.accessToken && s.accessToken !== token) { setForbidden(true); return; }
+    if (s.accessToken && token !== s.accessToken) { setForbidden(true); return; }
     setStudent(s);
   }, [studentId, token]);
   useEffect(() => { load(); pollRef.current = setInterval(load, 5000); return () => clearInterval(pollRef.current); }, [load]);
