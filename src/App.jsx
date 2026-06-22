@@ -8,6 +8,15 @@ import {
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
 
+function getAuthHeaders() {
+  const jwt = sessionStorage.getItem("coach_token");
+  return {
+    apikey: SUPABASE_KEY,
+    Authorization: `Bearer ${jwt || SUPABASE_KEY}`,
+    "Content-Type": "application/json",
+  };
+}
+
 const SB_HEADERS = {
   apikey: SUPABASE_KEY,
   Authorization: `Bearer ${SUPABASE_KEY}`,
@@ -26,7 +35,7 @@ async function authSignIn(email, password) {
 
 async function safeGet(key) {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_storage?key=eq.${encodeURIComponent(key)}&select=value`, { headers: SB_HEADERS });
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_storage?key=eq.${encodeURIComponent(key)}&select=value`, { headers: getAuthHeaders() });
     if (!res.ok) return null;
     const rows = await res.json();
     if (!rows.length) return null;
@@ -38,7 +47,7 @@ async function safeSet(key, value) {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/app_storage`, {
       method: "POST",
-      headers: { ...SB_HEADERS, Prefer: "resolution=merge-duplicates" },
+      headers: { ...getAuthHeaders(), Prefer: "resolution=merge-duplicates" },
       body: JSON.stringify({ key, value: JSON.stringify(value), updated_at: new Date().toISOString() }),
     });
     return res.ok;
@@ -47,7 +56,7 @@ async function safeSet(key, value) {
 
 async function safeDelete(key) {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_storage?key=eq.${encodeURIComponent(key)}`, { method: "DELETE", headers: SB_HEADERS });
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_storage?key=eq.${encodeURIComponent(key)}`, { method: "DELETE", headers: getAuthHeaders() });
     return res.ok;
   } catch { return false; }
 }
@@ -592,7 +601,8 @@ function CoachLoginPage({ onUnlock }) {
     setLoading(true);
     setError("");
     try {
-      await authSignIn(email.trim(), password);
+      const data = await authSignIn(email.trim(), password);
+      sessionStorage.setItem("coach_token", data.access_token);
       onUnlock();
     } catch {
       setError("Email ou mot de passe incorrect.");
