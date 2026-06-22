@@ -14,6 +14,16 @@ const SB_HEADERS = {
   "Content-Type": "application/json",
 };
 
+async function authSignIn(email, password) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) throw new Error("Identifiants incorrects");
+  return res.json();
+}
+
 async function safeGet(key) {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/app_storage?key=eq.${encodeURIComponent(key)}&select=value`, { headers: SB_HEADERS });
@@ -62,6 +72,7 @@ function newStudent({ name, sex, height, weight, age, sessionsPerWeek, mealsPerD
     id, name, sex, age: age || "", height: height || "",
     sessionsPerWeek: sessionsPerWeek || "",
     mealsPerDay: mealsPerDay || "",
+    accessToken: uid() + uid(),
     weightHistory: weight ? [{ date: todayISO(), value: Number(weight) }] : [],
     training: { planName: "", days: [] },
     diet: { planName: "", calories: "", protein: "", carbs: "", fat: "", meals: [] },
@@ -518,8 +529,8 @@ export default function CoachApp() {
   useEffect(() => {
     function resolve() {
       const hash = window.location.hash || "";
-      const mStudent = hash.match(/student=([a-z0-9]+)/i);
-      if (mStudent) { setRoute({ view: "student-portal", studentId: mStudent[1] }); return; }
+      const mStudent = hash.match(/student=([a-z0-9]+)\.([a-z0-9]+)/i);
+      if (mStudent) { setRoute({ view: "student-portal", studentId: mStudent[1], token: mStudent[2] }); return; }
       if (hash === "#join") { setRoute({ view: "onboarding" }); return; }
       setRoute({ view: "coach" });
     }
@@ -537,16 +548,14 @@ export default function CoachApp() {
   useEffect(() => { loadIndex(); }, [loadIndex]);
 
   if (route.view === "loading") return <Shell><LoadingState /></Shell>;
-  if (route.view === "student-portal") return <Shell><StudentPortal studentId={route.studentId} /></Shell>;
+  if (route.view === "student-portal") return <Shell><StudentPortal studentId={route.studentId} token={route.token} /></Shell>;
   if (route.view === "onboarding") return <Shell><OnboardingPage /></Shell>;
-  if (!coachUnlocked) return <Shell><LandingPage onCoach={() => { sessionStorage.setItem("show_pin","1"); setShowPin(true); }} showPin={showPin} onUnlock={() => { sessionStorage.setItem("coach_auth","1"); setCoachUnlocked(true); }} /></Shell>;
+  if (!coachUnlocked) return <Shell><LandingPage onCoach={() => setShowPin(true)} showPin={showPin} onUnlock={() => { sessionStorage.setItem("coach_auth","1"); setCoachUnlocked(true); }} /></Shell>;
   return <Shell><CoachApp_Inner students={students} refreshIndex={loadIndex} /></Shell>;
 }
 
-const COACH_PIN = "1234";
-
 function LandingPage({ onCoach, showPin, onUnlock }) {
-  if (showPin) return <CoachPinGate onUnlock={onUnlock} />;
+  if (showPin) return <CoachLoginPage onUnlock={onUnlock} />;
   return (
     <div className="landing">
       <div className="landing-inner">
@@ -572,33 +581,33 @@ function LandingPage({ onCoach, showPin, onUnlock }) {
   );
 }
 
-function CoachPinGate({ onUnlock }) {
-  const [pin, setPin] = useState("");
-  const [error, setError] = useState(false);
-  function tryPin(val) {
-    setPin(val);
-    if (val.length === 4) {
-      if (val === COACH_PIN) { onUnlock(); }
-      else { setError(true); setTimeout(() => { setPin(""); setError(false); }, 700); }
-    } else {
-      setError(false);
+function CoachLoginPage({ onUnlock }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  async function submit() {
+    if (!email.trim() || !password) return;
+    setLoading(true);
+    setError("");
+    try {
+      await authSignIn(email.trim(), password);
+      onUnlock();
+    } catch {
+      setError("Email ou mot de passe incorrect.");
     }
+    setLoading(false);
   }
   return (
     <div className="pin-gate">
-      <div className="pin-card">
+      <div className="pin-card login-card">
         <div className="pin-logo"><div className="mark" /><span className="brand-name">Fonte</span></div>
-        <p className="pin-label">Code coach</p>
-        <div className={`pin-dots ${error ? "shake" : ""}`}>
-          {[0,1,2,3].map((i) => <div key={i} className={`pin-dot ${pin.length > i ? "filled" : ""} ${error ? "err" : ""}`} />)}
-        </div>
-        <div className="pin-grid">
-          {[1,2,3,4,5,6,7,8,9,"",0,"\u232b"].map((k, i) => (
-            <button key={i} className={`pin-key ${k === "" ? "invisible" : ""}`} onClick={() => {
-              if (k === "\u232b") tryPin(pin.slice(0,-1));
-              else if (k !== "" && pin.length < 4) tryPin(pin + k);
-            }}>{k}</button>
-          ))}
+        <p className="pin-label">Connexion coach</p>
+        <div className="modal-form" style={{ marginTop: 20 }}>
+          <label className="field"><span>Email</span><input type="email" autoFocus autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} /></label>
+          <label className="field"><span>Mot de passe</span><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} /></label>
+          {error && <p className="onboarding-error">{error}</p>}
+          <button className="btn primary full" onClick={submit} disabled={loading || !email || !password}>{loading ? "Connexion\u2026" : "Se connecter"}</button>
         </div>
       </div>
     </div>
@@ -704,6 +713,11 @@ function ApplySessionModal({ session, students, onClose, onApply }) {
 }
 
 function Sidebar({ section, setSection, studentCount, isMobile, navOpen, setNavOpen }) {
+  function logout() {
+    sessionStorage.removeItem("coach_auth");
+    sessionStorage.removeItem("coach_token");
+    window.location.reload();
+  }
   const content = (
     <>
       <div className="brand">
@@ -725,6 +739,9 @@ function Sidebar({ section, setSection, studentCount, isMobile, navOpen, setNavO
           );
         })}
       </nav>
+      <div className="sidebar-bottom">
+        <button className="sidebar-logout" onClick={logout}>Déconnexion</button>
+      </div>
     </>
   );
   if (isMobile) return <aside className={`sidebar mobile-drawer ${navOpen ? "open" : ""}`}>{content}</aside>;
@@ -987,7 +1004,7 @@ function StudentDetailPage({ studentId, onBack, onDeleted, isMobile, reloadSigna
     onDeleted();
   }
   if (!student) return <LoadingState />;
-  const link = `${window.location.origin}${window.location.pathname}#student=${studentId}`;
+  const link = `${window.location.origin}${window.location.pathname}#student=${studentId}.${student.accessToken || ""}`;
   const lastWeight = student.weightHistory?.length ? student.weightHistory[student.weightHistory.length - 1].value : null;
   return (
     <>
@@ -1329,14 +1346,21 @@ function ChatPanel({ studentId, sender }) {
   );
 }
 
-function StudentPortal({ studentId }) {
+function StudentPortal({ studentId, token }) {
   const [student, setStudent] = useState(null);
   const [tab, setTab] = useState("entrainement");
   const [notFound, setNotFound] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
   const pollRef = useRef(null);
-  const load = useCallback(async () => { const s = await safeGet(KEYS.student(studentId)); if (!s) setNotFound(true); else setStudent(s); }, [studentId]);
+  const load = useCallback(async () => {
+    const s = await safeGet(KEYS.student(studentId));
+    if (!s) { setNotFound(true); return; }
+    if (s.accessToken && s.accessToken !== token) { setForbidden(true); return; }
+    setStudent(s);
+  }, [studentId, token]);
   useEffect(() => { load(); pollRef.current = setInterval(load, 5000); return () => clearInterval(pollRef.current); }, [load]);
   if (notFound) return <div className="empty-state"><div className="empty-plate"><User size={30} strokeWidth={1.5} /></div><h2>Profil introuvable</h2><p>Ce lien ne correspond à aucun élève. Vérifie le lien avec ton coach.</p></div>;
+  if (forbidden) return <div className="empty-state"><div className="empty-plate"><User size={30} strokeWidth={1.5} /></div><h2>Lien invalide</h2><p>Ce lien n'est pas valide ou a expiré. Demande à ton coach de te renvoyer ton lien personnel.</p></div>;
   if (!student) return <LoadingState />;
   const training = student.training || { planName: "", days: [] };
   const diet = student.diet || { planName: "", calories: "", protein: "", carbs: "", fat: "", meals: [] };
@@ -2060,6 +2084,11 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .sp-nav-btn.active svg{filter:drop-shadow(0 0 6px #C8FF4D55)}
 .sp-nav-dot{position:absolute;top:10px;right:calc(50% - 16px);width:6px;height:6px;border-radius:50%;background:var(--acid);display:none}
 .sp-nav-btn:last-child .sp-nav-dot{display:block}
+.sidebar-bottom{margin-top:auto;padding-top:16px}
+.sidebar-logout{width:100%;padding:9px 11px;border-radius:var(--r-sm);background:transparent;border:1px solid var(--line);color:var(--txt-3);font-size:13px;font-weight:500;cursor:pointer;text-align:left;transition:.14s}
+.sidebar-logout:hover{background:var(--bg-2);color:var(--txt);border-color:var(--line-2)}
+.login-card{width:100%;max-width:360px}
+.login-card .modal-form{gap:14px;display:flex;flex-direction:column}
 .pin-gate{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:calc(env(safe-area-inset-top) + 24px) 24px 24px}
 .pin-card{width:100%;max-width:320px;display:flex;flex-direction:column;align-items:center;gap:24px}
 .pin-logo{display:flex;align-items:center;gap:10px}
