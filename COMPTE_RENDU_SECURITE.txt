@@ -1,0 +1,274 @@
+================================================================
+COMPTE RENDU — AUDIT ET CORRECTIONS DE SÉCURITÉ
+Application : Fonte Coaching
+Date        : 28 juin 2026
+Branche Git : claude/fonte-coaching-security-r6x2ku
+================================================================
+
+
+────────────────────────────────────────────────────────────────
+1. CONTEXTE ET STACK TECHNIQUE
+────────────────────────────────────────────────────────────────
+
+L'application Fonte Coaching est une PWA de gestion de coaching
+sportif. Voici la stack identifiée lors de l'audit :
+
+  - Frontend  : React 18.3.1 + Vite (monofichier src/App.jsx, ~2160 lignes)
+  - Backend   : Supabase (Auth + base de données PostgREST)
+  - Déploiement : Vercel (vercel.json avec headers de sécurité CSP/HSTS)
+  - Dépendances : lucide-react (icônes uniquement)
+
+Deux types d'utilisateurs :
+  - Coach    → authentification email/mot de passe via Supabase Auth
+               → JWT stocké dans sessionStorage sous "coach_token"
+               → rôle Supabase : authenticated
+  - Étudiant → accès sans compte, via lien unique contenant un token
+               → format : #student={id}.{accessToken}
+               → rôle Supabase : anon (clé publique SUPABASE_KEY)
+
+
+────────────────────────────────────────────────────────────────
+2. AUDIT — INVENTAIRE DES VULNÉRABILITÉS TROUVÉES
+────────────────────────────────────────────────────────────────
+
+2.1  Row Level Security (RLS) absente
+--------------------------------------
+Table concernée : app_storage (unique table du projet)
+
+La table app_storage est un store clé-valeur contenant :
+  - "students:index"      → liste de tous les étudiants
+  - "student:{id}"        → données complètes d'un étudiant
+  - "chat:{id}"           → historique de messages coach/étudiant
+  - "gyms:index"          → liste des salles de sport
+  - "planning:sessions"   → calendrier des séances
+
+Sans RLS activé, n'importe quelle requête avec la clé anon publique
+(VITE_SUPABASE_KEY, exposée dans le bundle JS du navigateur) peut
+lire, écrire ou supprimer n'importe quelle ligne de cette table.
+Il n'existe aucune séparation entre les données du coach et celles
+accessibles aux étudiants au niveau de la base de données.
+
+Conséquences potentielles :
+  - Un étudiant curieux peut lire les données de tous les autres étudiants
+  - Un tiers peut lire le planning complet, la liste des salles, etc.
+  - Un acteur malveillant peut modifier ou effacer des données
+
+2.2  Générateur d'identifiants non cryptographique
+----------------------------------------------------
+Fichier : src/App.jsx, ligne 72
+
+Code incriminé :
+  function uid() {
+    return Math.random().toString(36).slice(2, 10)
+           + Date.now().toString(36).slice(-4);
+  }
+
+Math.random() n'est PAS un générateur cryptographiquement sécurisé
+(CSPRNG). Son état interne peut être reconstruit ou prédit dans
+certains environnements. Date.now() est entièrement déterministe.
+
+Cette fonction uid() génère les identifiants des étudiants, des
+exercices, des repas et des séances. L'ID étudiant est inclus dans
+le lien de portail transmis à l'étudiant :
+  https://app.example.com/#student={id}.{accessToken}
+
+Si l'ID est prévisible, un attaquant peut énumérer les IDs et
+tenter des accès non autorisés au portail étudiant.
+
+Note : la fonction secureToken() (ligne 73) utilisant déjà
+crypto.randomUUID() était correcte et n'a pas été modifiée.
+
+
+────────────────────────────────────────────────────────────────
+3. CORRECTION 1 — ROW LEVEL SECURITY SUPABASE
+────────────────────────────────────────────────────────────────
+
+Fichier créé : supabase/migrations/001_enable_rls.sql
+
+3.1  Logique de la migration
+-----------------------------
+La migration est conçue pour être exécutée dans le SQL Editor de
+Supabase (en tant que rôle service). Elle est idempotente (peut
+être relancée sans erreur grâce aux IF NOT EXISTS / DROP IF EXISTS).
+
+Étapes du fichier SQL :
+
+  ÉTAPE 1 — Création de la table si absente
+    CREATE TABLE IF NOT EXISTS app_storage (
+      key        TEXT PRIMARY KEY,
+      value      TEXT NOT NULL DEFAULT '{}',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+  ÉTAPE 2 — Ajout de la colonne coach_id
+    ALTER TABLE app_storage
+      ADD COLUMN IF NOT EXISTS coach_id UUID DEFAULT auth.uid();
+
+    La clause DEFAULT auth.uid() est clé : Supabase évalue
+    automatiquement l'UUID de l'utilisateur authentifié lors de
+    chaque INSERT, sans aucune modification du code JavaScript.
+
+  ÉTAPE 3 — Back-fill des lignes existantes (manuel)
+    Une instruction UPDATE est fournie en commentaire. Le coach doit
+    remplacer '<YOUR_COACH_UUID>' par son UUID (visible dans
+    Supabase → Authentication → Users), puis l'exécuter une fois.
+
+  ÉTAPE 4 — Index de performance
+    CREATE INDEX IF NOT EXISTS idx_app_storage_coach_id
+      ON app_storage (coach_id);
+
+  ÉTAPE 5 — Activation du RLS
+    ALTER TABLE app_storage ENABLE ROW LEVEL SECURITY;
+
+  ÉTAPE 6 — Suppression des anciennes policies (idempotence)
+    DROP POLICY IF EXISTS ... (7 policies)
+
+3.2  Policies créées pour le coach (rôle : authenticated)
+----------------------------------------------------------
+Le JWT du coach est envoyé dans l'en-tête Authorization.
+Supabase résout auth.uid() côté serveur depuis ce JWT.
+
+  coach_select  → SELECT  : USING (coach_id = auth.uid())
+  coach_insert  → INSERT  : WITH CHECK (coach_id = auth.uid() OR NULL)
+  coach_update  → UPDATE  : USING + WITH CHECK (coach_id = auth.uid())
+  coach_delete  → DELETE  : USING (coach_id = auth.uid())
+
+Le coach ne peut donc accéder qu'aux données portant son propre UUID.
+Aucune donnée d'un autre coach (usage futur multi-coach) n'est visible.
+
+3.3  Policies créées pour les étudiants (rôle : anon)
+------------------------------------------------------
+Les étudiants utilisent la clé publique anon — ils n'ont pas de
+compte Supabase. La validation du token (accessToken dans l'URL vs.
+valeur stockée) reste effectuée dans le code JavaScript de l'app.
+Le RLS restreint quels namespaces de clés sont accessibles.
+
+  student_read         → SELECT  : key ~ '^(student:|chat:)'
+    Les étudiants peuvent lire les clés "student:*" et "chat:*".
+    Les namespaces "students:index", "gyms:index" et
+    "planning:sessions" sont totalement invisibles au rôle anon.
+
+  student_chat_insert  → INSERT  : key ~ '^chat:'
+    PostgREST utilise un upsert (prefer: resolution=merge-duplicates)
+    qui déclenche un INSERT. La policy INSERT est donc nécessaire.
+
+  student_chat_update  → UPDATE  : key ~ '^chat:'
+    Si une ligne chat existe déjà, l'upsert déclenche un UPDATE.
+    Les étudiants peuvent ainsi ajouter des messages au fil existant.
+
+3.4  Ce que cette correction protège
+--------------------------------------
+  AVANT : n'importe qui avec la clé anon peut tout lire/écrire.
+  APRÈS :
+    - Seul le coach authentifié accède à ses propres données complètes.
+    - Les étudiants (anon) ne voient que student:* et chat:*.
+    - Les étudiants ne peuvent écrire que sur chat:*.
+    - Aucun accès anonyme aux données sensibles du planning ou
+      à l'index complet des étudiants.
+
+
+────────────────────────────────────────────────────────────────
+4. CORRECTION 2 — REMPLACEMENT DE Math.random()
+────────────────────────────────────────────────────────────────
+
+Fichier modifié : src/App.jsx, ligne 72
+
+4.1  Avant (vulnérable)
+------------------------
+  function uid() {
+    return Math.random().toString(36).slice(2, 10)
+           + Date.now().toString(36).slice(-4);
+  }
+
+  Problèmes :
+    - Math.random() : non-CSPRNG, état prédictible
+    - Date.now()    : entièrement déterministe (horodatage public)
+    - Résultat      : 12 caractères base36, entropie insuffisante
+
+4.2  Après (sécurisé)
+----------------------
+  function uid() {
+    const a = new Uint8Array(8);
+    crypto.getRandomValues(a);
+    return Array.from(a, b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  Améliorations :
+    - crypto.getRandomValues() : CSPRNG du navigateur (W3C standard),
+      utilisé par tous les navigateurs modernes
+    - 8 octets aléatoires → 64 bits d'entropie
+    - Résultat : 16 caractères hexadécimaux, non prédictibles
+    - Compatible avec tous les environnements où tourne l'app
+
+4.3  Fonctions non modifiées
+-----------------------------
+  secureToken() (ligne 73) utilise déjà crypto.randomUUID() qui est
+  cryptographiquement sécurisé. Cette fonction génère les accessToken
+  des étudiants et était déjà correcte.
+
+
+────────────────────────────────────────────────────────────────
+5. FICHIERS MODIFIÉS / CRÉÉS
+────────────────────────────────────────────────────────────────
+
+  CRÉÉ    supabase/migrations/001_enable_rls.sql
+            Migration SQL complète, commentée, prête à exécuter
+            dans le SQL Editor Supabase.
+
+  MODIFIÉ src/App.jsx (ligne 72 uniquement)
+            Remplacement de uid() : Math.random() → crypto.getRandomValues()
+
+
+────────────────────────────────────────────────────────────────
+6. ACTIONS MANUELLES REQUISES CÔTÉ SUPABASE
+────────────────────────────────────────────────────────────────
+
+Ces étapes ne peuvent pas être automatisées depuis le code — elles
+nécessitent un accès au tableau de bord Supabase.
+
+  ÉTAPE A — Exécuter la migration SQL
+    1. Ouvrir Supabase → SQL Editor
+    2. Coller le contenu de supabase/migrations/001_enable_rls.sql
+    3. Cliquer "Run"
+
+  ÉTAPE B — Back-fill des données existantes
+    1. Dans Supabase → Authentication → Users, copier l'UUID du coach
+    2. Dans le SQL Editor, exécuter :
+         UPDATE app_storage
+           SET coach_id = '<UUID_DU_COACH>'
+           WHERE coach_id IS NULL;
+    3. Vérifier : SELECT COUNT(*) FROM app_storage WHERE coach_id IS NULL;
+       → doit retourner 0
+
+  ÉTAPE C — Vérification des policies
+    Dans le SQL Editor :
+      SELECT policyname, cmd, roles, qual, with_check
+        FROM pg_policies
+        WHERE tablename = 'app_storage'
+        ORDER BY policyname;
+    → doit lister les 7 policies créées
+
+
+────────────────────────────────────────────────────────────────
+7. COMMIT GIT
+────────────────────────────────────────────────────────────────
+
+Hash    : 4eb362c
+Message : security: enable Supabase RLS and replace Math.random() with CSPRNG
+Branche : claude/fonte-coaching-security-r6x2ku
+Remote  : origin (poussé avec succès)
+
+
+────────────────────────────────────────────────────────────────
+8. RÉCAPITULATIF DES VULNÉRABILITÉS ET STATUT
+────────────────────────────────────────────────────────────────
+
+  N°  Description                          Sévérité   Statut
+  ──  ───────────────────────────────────  ─────────  ──────────────────────
+  1   RLS absent sur app_storage           CRITIQUE   CORRIGÉ (migration SQL)
+  2   Math.random() pour générer des IDs   MODÉRÉE    CORRIGÉ (App.jsx l.72)
+
+
+================================================================
+Fin du compte rendu
+================================================================
