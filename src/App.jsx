@@ -33,6 +33,27 @@ async function authSignIn(email, password) {
   return res.json();
 }
 
+// Inscription d'un nouveau coach via Supabase Auth
+async function authSignUp(email, password) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.msg || err.message || "Inscription échouée");
+  }
+  return res.json();
+}
+
+// Décoder l'UUID du coach depuis le JWT stocké en session (sans vérification de signature)
+function getCoachUid() {
+  const token = sessionStorage.getItem("coach_token");
+  if (!token) return null;
+  try { return JSON.parse(atob(token.split(".")[1])).sub; } catch { return null; }
+}
+
 async function safeGet(key) {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/app_storage?key=eq.${encodeURIComponent(key)}&select=value`, { headers: getAuthHeaders() });
@@ -67,6 +88,7 @@ const KEYS = {
   chat: (id) => `chat:${id}`,
   gyms: "gyms:index",
   sessions: "planning:sessions",
+  coachProfile: (uid) => `coach_profile:${uid}`, // plan freemium et compteur d'élèves
 };
 
 function uid() { const a = new Uint8Array(8); crypto.getRandomValues(a); return Array.from(a, b => b.toString(16).padStart(2, '0')).join(''); }
@@ -534,7 +556,6 @@ export default function CoachApp() {
   const [route, setRoute] = useState({ view: "loading" });
   const [students, setStudents] = useState([]);
   const [coachUnlocked, setCoachUnlocked] = useState(() => sessionStorage.getItem("coach_auth") === "1");
-  const [showPin, setShowPin] = useState(() => sessionStorage.getItem("show_pin") === "1");
 
   useEffect(() => {
     function resolve() {
@@ -542,6 +563,8 @@ export default function CoachApp() {
       const mStudent = hash.match(/student=([a-z0-9]+)(?:\.([a-z0-9]+))?/i);
       if (mStudent) { setRoute({ view: "student-portal", studentId: mStudent[1], token: mStudent[2] || "" }); return; }
       if (hash === "#join") { setRoute({ view: "onboarding" }); return; }
+      // Page de confirmation après paiement Stripe réussi
+      if (hash === "#success") { setRoute({ view: "payment-success" }); return; }
       setRoute({ view: "coach" });
     }
     resolve();
@@ -557,15 +580,28 @@ export default function CoachApp() {
 
   useEffect(() => { loadIndex(); }, [loadIndex]);
 
+  function handleUnlock() {
+    sessionStorage.setItem("coach_auth", "1");
+    setCoachUnlocked(true);
+  }
+
   if (route.view === "loading") return <Shell><LoadingState /></Shell>;
   if (route.view === "student-portal") return <Shell><StudentPortal studentId={route.studentId} token={route.token} /></Shell>;
   if (route.view === "onboarding") return <Shell><OnboardingPage /></Shell>;
-  if (!coachUnlocked) return <Shell><LandingPage onCoach={() => setShowPin(true)} showPin={showPin} onUnlock={() => { sessionStorage.setItem("coach_auth","1"); setCoachUnlocked(true); }} /></Shell>;
+  if (route.view === "payment-success") return <Shell><PaymentSuccessPage /></Shell>;
+  if (!coachUnlocked) return <Shell><CoachAuthPage onUnlock={handleUnlock} /></Shell>;
   return <Shell><CoachApp_Inner students={students} refreshIndex={loadIndex} /></Shell>;
 }
 
-function LandingPage({ onCoach, showPin, onUnlock }) {
-  if (showPin) return <CoachLoginPage onUnlock={onUnlock} />;
+// Gère la navigation entre la page d'accueil, la connexion et l'inscription
+function CoachAuthPage({ onUnlock }) {
+  const [mode, setMode] = useState("landing");
+  if (mode === "login") return <CoachLoginPage onUnlock={onUnlock} onGoSignup={() => setMode("signup")} />;
+  if (mode === "signup") return <CoachSignupPage onUnlock={onUnlock} onGoLogin={() => setMode("login")} />;
+  return <LandingPage onCoach={() => setMode("login")} onSignup={() => setMode("signup")} />;
+}
+
+function LandingPage({ onCoach, onSignup }) {
   return (
     <div className="landing">
       <div className="landing-inner">
@@ -586,12 +622,13 @@ function LandingPage({ onCoach, showPin, onUnlock }) {
             <span className="lc-desc">Ouvre le lien personnel que ton coach t'a envoyé par WhatsApp ou SMS pour accéder à ton espace.</span>
           </div>
         </div>
+        <p className="landing-signup-link">Nouveau coach ? <button className="link-btn" onClick={onSignup}>Créer un compte gratuit</button></p>
       </div>
     </div>
   );
 }
 
-function CoachLoginPage({ onUnlock }) {
+function CoachLoginPage({ onUnlock, onGoSignup }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -619,7 +656,96 @@ function CoachLoginPage({ onUnlock }) {
           <label className="field"><span>Mot de passe</span><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} /></label>
           {error && <p className="onboarding-error">{error}</p>}
           <button className="btn primary full" onClick={submit} disabled={loading || !email || !password}>{loading ? "Connexion\u2026" : "Se connecter"}</button>
+          {onGoSignup && <p className="auth-switch-link">Pas encore de compte ? <button className="link-btn" onClick={onGoSignup}>Cr\u00e9er un compte gratuit</button></p>}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Page d'inscription d'un nouveau coach (plan gratuit, 3 \u00e9l\u00e8ves max)
+function CoachSignupPage({ onUnlock, onGoLogin }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [confirmEmail, setConfirmEmail] = useState(false);
+
+  async function submit() {
+    if (!name.trim() || !email.trim() || password.length < 6) {
+      setError("Remplis tous les champs (mot de passe : 6 caract\u00e8res minimum).");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const data = await authSignUp(email.trim(), password);
+      if (data.access_token) {
+        // Confirmation email d\u00e9sactiv\u00e9e : on connecte directement le coach
+        sessionStorage.setItem("coach_token", data.access_token);
+        const uid = data.user?.id;
+        if (uid) {
+          // Cr\u00e9er le profil coach avec le plan gratuit
+          await safeSet(KEYS.coachProfile(uid), {
+            name: name.trim(),
+            email: email.trim(),
+            plan: "free",
+            studentCount: 0,
+          });
+        }
+        onUnlock();
+      } else {
+        // Supabase requiert une confirmation par email
+        setConfirmEmail(true);
+      }
+    } catch (e) {
+      setError(e.message || "Une erreur est survenue.");
+    }
+    setLoading(false);
+  }
+
+  if (confirmEmail) {
+    return (
+      <div className="pin-gate">
+        <div className="pin-card login-card">
+          <div className="pin-logo"><div className="mark" /><span className="brand-name">Fonte</span></div>
+          <p className="pin-label">V\u00e9rifie ton email</p>
+          <p className="auth-confirm-text">Un email de confirmation a \u00e9t\u00e9 envoy\u00e9 \u00e0 <strong>{email}</strong>. Clique sur le lien pour activer ton compte, puis connecte-toi.</p>
+          <button className="btn primary full" onClick={onGoLogin}>Se connecter</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pin-gate">
+      <div className="pin-card login-card">
+        <div className="pin-logo"><div className="mark" /><span className="brand-name">Fonte</span></div>
+        <p className="pin-label">Cr\u00e9er un compte coach</p>
+        <div className="modal-form" style={{ marginTop: 20 }}>
+          <label className="field"><span>Nom</span><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ton pr\u00e9nom et nom" /></label>
+          <label className="field"><span>Email</span><input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+          <label className="field"><span>Mot de passe</span><input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} /></label>
+          {error && <p className="onboarding-error">{error}</p>}
+          <button className="btn primary full" onClick={submit} disabled={loading || !name || !email || !password}>{loading ? "Cr\u00e9ation\u2026" : "Cr\u00e9er mon compte"}</button>
+          <p className="auth-switch-link">D\u00e9j\u00e0 un compte ? <button className="link-btn" onClick={onGoLogin}>Se connecter</button></p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Page de confirmation affich\u00e9e apr\u00e8s un paiement Stripe r\u00e9ussi (#success)
+function PaymentSuccessPage() {
+  return (
+    <div className="onboarding-wrap">
+      <div className="onboarding-card" style={{ textAlign: "center" }}>
+        <div className="pin-logo" style={{ justifyContent: "center" }}><div className="mark" /><span className="brand-name">Fonte</span></div>
+        <div className="ob-check-circle" style={{ margin: "28px auto 0" }}><Check size={32} color="#0E0F12" strokeWidth={3} /></div>
+        <h2 style={{ marginTop: 20 }}>Bienvenue dans Fonte Pro !</h2>
+        <p className="muted" style={{ lineHeight: 1.6 }}>Ton abonnement est actif. Tu peux maintenant g\u00e9rer un nombre illimit\u00e9 d'\u00e9l\u00e8ves.</p>
+        <button className="btn primary" style={{ marginTop: 24 }} onClick={() => { window.location.hash = ""; }}>Acc\u00e9der \u00e0 mon espace</button>
       </div>
     </div>
   );
@@ -654,10 +780,58 @@ function CoachApp_Inner({ students, refreshIndex }) {
   const [navOpen, setNavOpen] = useState(false);
   const [applyTarget, setApplyTarget] = useState(null);
   const [reloadSignal, setReloadSignal] = useState(0);
+  // Profil coach : plan ("free" | "pro") et compteur d'élèves
+  const [coachProfile, setCoachProfile] = useState(null);
+  // Afficher le modal d'upgrade quand la limite freemium est atteinte
+  const [showUpgrade, setShowUpgrade] = useState(false);
   const isMobile = useIsMobile();
+
+  // Charger le profil coach au montage pour connaître son plan
+  useEffect(() => {
+    const uid = getCoachUid();
+    if (!uid) return;
+    safeGet(KEYS.coachProfile(uid)).then((p) => { if (p) setCoachProfile(p); });
+  }, []);
 
   function goToStudent(id) { setSelectedId(id); setSection("students"); setNavOpen(false); }
   function changeSection(s) { setSection(s); setSelectedId(null); setNavOpen(false); }
+
+  // Incrémenter ou décrémenter studentCount dans le profil coach (delta = +1 ou -1)
+  async function updateStudentCount(delta) {
+    const uid = getCoachUid();
+    if (!uid) return;
+    const current = coachProfile || (await safeGet(KEYS.coachProfile(uid)));
+    if (!current) return;
+    const updated = { ...current, studentCount: Math.max(0, (current.studentCount || 0) + delta) };
+    await safeSet(KEYS.coachProfile(uid), updated);
+    setCoachProfile(updated);
+  }
+
+  // Vérifier la limite freemium AVANT d'ouvrir le modal d'ajout d'élève
+  function handleAddStudent() {
+    // Bloquer si plan gratuit et 3 élèves déjà créés
+    if (coachProfile?.plan === "free" && students.length >= 3) {
+      setShowUpgrade(true);
+    } else {
+      setShowAdd(true);
+    }
+  }
+
+  // Lancer le checkout Stripe via la serverless function Vercel
+  async function handleUpgrade() {
+    try {
+      const uid = getCoachUid();
+      const res = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ coachId: uid, email: coachProfile?.email || "" }),
+      });
+      const { url } = await res.json();
+      if (url) window.location.href = url;
+    } catch {
+      alert("Impossible de démarrer le paiement. Réessaie.");
+    }
+  }
 
   async function applySessionToStudent(studentId, session) {
     const s = await safeGet(KEYS.student(studentId));
@@ -674,17 +848,23 @@ function CoachApp_Inner({ students, refreshIndex }) {
 
   return (
     <div className={`app-grid ${isMobile ? "is-mobile" : ""}`}>
-      <Sidebar section={section} setSection={changeSection} studentCount={students.length} isMobile={isMobile} navOpen={navOpen} setNavOpen={setNavOpen} />
+      <Sidebar section={section} setSection={changeSection} studentCount={students.length} isMobile={isMobile} navOpen={navOpen} setNavOpen={setNavOpen} coachProfile={coachProfile} />
       {isMobile && navOpen && <div className="nav-scrim" onClick={() => setNavOpen(false)} />}
       <main className="main">
         {showingDetail ? (
-          <StudentDetailPage studentId={selectedId} onBack={() => { setSelectedId(null); refreshIndex(); }} onDeleted={() => { setSelectedId(null); refreshIndex(); }} isMobile={isMobile} reloadSignal={reloadSignal} />
+          <StudentDetailPage
+            studentId={selectedId}
+            onBack={() => { setSelectedId(null); refreshIndex(); }}
+            onDeleted={async () => { await updateStudentCount(-1); setSelectedId(null); refreshIndex(); }}
+            isMobile={isMobile}
+            reloadSignal={reloadSignal}
+          />
         ) : (
           <>
-            <TopBar section={section} query={query} setQuery={setQuery} onAdd={() => setShowAdd(true)} isMobile={isMobile} onMenu={() => setNavOpen(true)} />
+            <TopBar section={section} query={query} setQuery={setQuery} onAdd={handleAddStudent} isMobile={isMobile} onMenu={() => setNavOpen(true)} />
             <div className="scroll">
               {section === "dashboard" && <DashboardSection students={students} onOpenStudent={goToStudent} />}
-              {section === "students" && <StudentsSection students={students} query={query} onOpenStudent={goToStudent} onAdd={() => setShowAdd(true)} />}
+              {section === "students" && <StudentsSection students={students} query={query} onOpenStudent={goToStudent} onAdd={handleAddStudent} />}
               {section === "programs" && <ProgramsSection onApplyToStudent={(session) => setApplyTarget(session)} students={students} />}
               {section === "planning" && <PlanningSection students={students} />}
               {section === "stats" && <StatsSection students={students} />}
@@ -693,18 +873,52 @@ function CoachApp_Inner({ students, refreshIndex }) {
         )}
       </main>
       {isMobile && !showingDetail && section === "students" && students.length > 0 && (
-        <button className="fab" onClick={() => setShowAdd(true)} aria-label="Ajouter un élève"><Plus size={22} strokeWidth={2.4} /></button>
+        <button className="fab" onClick={handleAddStudent} aria-label="Ajouter un élève"><Plus size={22} strokeWidth={2.4} /></button>
       )}
       {showAdd && (
         <AddStudentModal onClose={() => setShowAdd(false)} onCreated={async (student) => {
           const idx = (await safeGet(KEYS.students)) || [];
           await safeSet(KEYS.students, [...idx, { id: student.id, name: student.name, sex: student.sex, createdAt: student.createdAt }]);
           await safeSet(KEYS.student(student.id), student);
+          // Incrémenter le compteur d'élèves dans le profil coach
+          await updateStudentCount(+1);
           setShowAdd(false);
           await refreshIndex();
         }} />
       )}
+      {/* Modal affiché quand la limite freemium de 3 élèves est atteinte */}
+      {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} onUpgrade={handleUpgrade} />}
       {applyTarget && <ApplySessionModal session={applyTarget} students={students} onClose={() => setApplyTarget(null)} onApply={applySessionToStudent} />}
+    </div>
+  );
+}
+
+// Modal de passage à la version Pro quand la limite de 3 élèves est atteinte
+function UpgradeModal({ onClose, onUpgrade }) {
+  const [loading, setLoading] = useState(false);
+  async function go() { setLoading(true); await onUpgrade(); setLoading(false); }
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>Limite atteinte</h3>
+          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="upgrade-body">
+          <div className="upgrade-alert">
+            <AlertTriangle size={20} style={{ color: "var(--red)", flexShrink: 0 }} />
+            <p>Tu as atteint la limite de <strong>3 élèves</strong> en version gratuite.</p>
+          </div>
+          <p className="upgrade-desc">Passe à Pro pour gérer un nombre illimité d'élèves et accéder à toutes les fonctionnalités.</p>
+          <div className="upgrade-price-box">
+            <span className="upgrade-price">39€<span className="upgrade-period">/mois</span></span>
+            <span className="upgrade-caption">Élèves illimités · Résiliation à tout moment</span>
+          </div>
+          <button className="btn primary full" onClick={go} disabled={loading}>
+            {loading ? "Redirection vers le paiement…" : "Passer à Pro — 39€/mois"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -723,7 +937,7 @@ function ApplySessionModal({ session, students, onClose, onApply }) {
   );
 }
 
-function Sidebar({ section, setSection, studentCount, isMobile, navOpen, setNavOpen }) {
+function Sidebar({ section, setSection, studentCount, isMobile, navOpen, setNavOpen, coachProfile }) {
   async function logout() {
     const token = sessionStorage.getItem("coach_token");
     sessionStorage.removeItem("coach_auth");
@@ -742,7 +956,14 @@ function Sidebar({ section, setSection, studentCount, isMobile, navOpen, setNavO
     <>
       <div className="brand">
         <div className="mark" />
-        <div><div className="brand-name">Fonte</div><div className="brand-sub mono">Studio Coaching</div></div>
+        <div>
+          <div className="brand-name">Fonte</div>
+          <div className="brand-sub mono">
+            Studio Coaching
+            {/* Badge plan : FREE ou PRO */}
+            {coachProfile && <span className={`plan-badge ${coachProfile.plan === "pro" ? "pro" : "free"}`}>{coachProfile.plan === "pro" ? "PRO" : "FREE"}</span>}
+          </div>
+        </div>
         {isMobile && <button className="icon-btn drawer-close" onClick={() => setNavOpen(false)} aria-label="Fermer le menu"><X size={18} /></button>}
       </div>
       <nav className="nav">
@@ -2156,4 +2377,23 @@ html,body,#root{margin:0;padding:0;background:#15161A;min-height:100vh}
 .dpm-item-amount{color:var(--txt-2);min-width:52px;text-align:right;padding-right:10px;font-size:12.5px}
 .dpm-item-kcal{color:var(--txt-4);min-width:68px;text-align:right;font-size:12px}.dpm-item:last-child{border-bottom:none}
 }
+/* ── Inscription / connexion ─────────────────────────────────── */
+.auth-switch-link{text-align:center;font-size:13px;color:var(--txt-3);margin:0}
+.auth-confirm-text{text-align:center;font-size:13.5px;color:var(--txt-2);line-height:1.6;margin:0}
+.link-btn{background:none;border:none;color:var(--acid);cursor:pointer;font-size:inherit;padding:0;font-weight:500}
+.link-btn:hover{text-decoration:underline}
+.landing-signup-link{font-size:12.5px;color:var(--txt-3);margin:0;text-align:center}
+/* ── Badge plan FREE/PRO dans la sidebar ─────────────────────── */
+.plan-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.08em;padding:2px 6px;border-radius:4px;margin-left:7px;vertical-align:middle}
+.plan-badge.free{background:var(--bg-3);color:var(--txt-3);border:1px solid var(--line)}
+.plan-badge.pro{background:var(--acid);color:#0E0F12}
+/* ── Modal upgrade freemium ──────────────────────────────────── */
+.upgrade-body{display:flex;flex-direction:column;gap:16px;padding:4px 0 2px}
+.upgrade-alert{display:flex;align-items:flex-start;gap:12px;background:rgba(255,80,80,.08);border:1px solid rgba(255,80,80,.18);border-radius:var(--r-sm);padding:14px}
+.upgrade-alert p{margin:0;font-size:13.5px;color:var(--txt);line-height:1.5}
+.upgrade-desc{margin:0;font-size:13px;color:var(--txt-2);line-height:1.6}
+.upgrade-price-box{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:16px 18px;display:flex;flex-direction:column;gap:4px}
+.upgrade-price{font-family:'Oswald';font-size:28px;font-weight:700;color:var(--acid)}
+.upgrade-period{font-size:15px;font-weight:400;color:var(--txt-3)}
+.upgrade-caption{font-size:12px;color:var(--txt-3)}
 `;
