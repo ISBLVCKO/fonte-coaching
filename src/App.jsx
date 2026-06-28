@@ -69,7 +69,7 @@ const KEYS = {
   sessions: "planning:sessions",
 };
 
-function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); }
+function uid() { const a = new Uint8Array(8); crypto.getRandomValues(a); return Array.from(a, b => b.toString(16).padStart(2, '0')).join(''); }
 function secureToken() { return crypto.randomUUID().replace(/-/g, ""); }
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 function formatDate(iso) { const d = new Date(iso + "T00:00:00"); return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }); }
