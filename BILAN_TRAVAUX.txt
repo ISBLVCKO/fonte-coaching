@@ -1,0 +1,414 @@
+================================================================
+BILAN COMPLET DES TRAVAUX — APPLICATION FONTE COACHING
+Date        : 28 juin 2026
+Repo        : github.com/isblvcko/fonte-coaching
+================================================================
+
+
+════════════════════════════════════════════════════════════════
+PARTIE 1 — CE QUI A ÉTÉ FAIT
+════════════════════════════════════════════════════════════════
+
+────────────────────────────────────────────────────────────────
+SESSION 1 — AUDIT ET CORRECTIONS DE SÉCURITÉ
+Branche : claude/fonte-coaching-security-r6x2ku
+Commits : 4eb362c, e9456ad
+────────────────────────────────────────────────────────────────
+
+1.1  ROW LEVEL SECURITY (RLS) SUPABASE
+---------------------------------------
+Fichier créé : supabase/migrations/001_enable_rls.sql
+
+Problème identifié :
+  La table app_storage (unique table du projet) n'avait aucune
+  protection RLS activée. N'importe qui possédant la clé anon
+  publique (exposée dans le bundle JS) pouvait lire, écrire ou
+  supprimer TOUTES les données de TOUS les coachs.
+
+Ce qui a été fait :
+  - Étape 1 : Création de la table app_storage si absente
+      (colonnes : key TEXT PK, value TEXT, updated_at TIMESTAMPTZ)
+
+  - Étape 2 : Ajout de la colonne coach_id UUID
+      DEFAULT auth.uid() — Supabase renseigne automatiquement
+      l'UUID du coach à chaque INSERT, sans modifier le code JS
+
+  - Étape 3 : Instructions de back-fill (commentées dans le SQL)
+      UPDATE app_storage SET coach_id = '<UUID>' WHERE coach_id IS NULL
+
+  - Étape 4 : Index de performance sur coach_id
+
+  - Étape 5 : ALTER TABLE app_storage ENABLE ROW LEVEL SECURITY
+
+  - Étape 6 : 7 policies créées :
+      Coach (rôle authenticated) :
+        coach_select  → SELECT  si coach_id = auth.uid()
+        coach_insert  → INSERT  si coach_id = auth.uid() ou NULL
+        coach_update  → UPDATE  si coach_id = auth.uid()
+        coach_delete  → DELETE  si coach_id = auth.uid()
+
+      Étudiant (rôle anon) :
+        student_read         → SELECT  sur clés "student:*" et "chat:*"
+        student_chat_insert  → INSERT  sur clés "chat:*" uniquement
+        student_chat_update  → UPDATE  sur clés "chat:*" uniquement
+
+  Résultat :
+    - Les namespaces "students:index", "gyms:index" et
+      "planning:sessions" sont INVISIBLES au rôle anonyme
+    - Un coach ne peut accéder qu'à ses propres données
+    - Les étudiants peuvent lire leur fiche et écrire dans le chat
+
+  ⚠️  CE FICHIER SQL DOIT ENCORE ÊTRE EXÉCUTÉ MANUELLEMENT
+      dans le SQL Editor Supabase (voir Partie 2 — Reste à faire)
+
+1.2  REMPLACEMENT DE Math.random()
+------------------------------------
+Fichier modifié : src/App.jsx (ligne 72)
+
+Problème identifié :
+  La fonction uid() utilisait Math.random() pour générer les IDs
+  des étudiants. Math.random() n'est PAS cryptographiquement sécurisé
+  et peut être prédit. L'ID étudiant figure dans le lien de portail,
+  ce qui permettait une énumération potentielle.
+
+Ce qui a été fait :
+  AVANT : Math.random().toString(36).slice(2,10) + Date.now()...
+  APRÈS : 8 octets via crypto.getRandomValues() → 16 chars hex
+
+  Note : secureToken() (accessToken des étudiants) utilisait déjà
+  crypto.randomUUID() et n'a pas été modifié.
+
+1.3  COMPTE RENDU DE SÉCURITÉ
+-------------------------------
+Fichier créé : COMPTE_RENDU_SECURITE.txt
+  Document détaillant les vulnérabilités trouvées, les corrections
+  appliquées et les actions manuelles requises.
+
+
+────────────────────────────────────────────────────────────────
+SESSION 2 — SYSTÈME DE MONÉTISATION COMPLET
+Branche : claude/practical-hamilton-1sj7y5
+Commit  : de58d27
+────────────────────────────────────────────────────────────────
+
+2.1  PAGE D'INSCRIPTION COACH
+-------------------------------
+Fichier modifié : src/App.jsx
+
+Nouvelles fonctions/composants ajoutés :
+
+  authSignUp(email, password)
+    Appel à /auth/v1/signup de Supabase. Gère deux cas :
+      - Email confirmation désactivée → session directe, connexion auto
+      - Email confirmation activée → affiche écran "Vérifie ton email"
+
+  getCoachUid()
+    Décode l'UUID du coach depuis le JWT (sessionStorage "coach_token")
+    sans appel réseau. Utilise atob() sur le payload base64 du JWT.
+
+  CoachAuthPage
+    Composant routeur interne gérant 3 états :
+      "landing"  → page d'accueil avec choix coach/élève
+      "login"    → page de connexion (existante, non cassée)
+      "signup"   → page d'inscription
+
+  CoachSignupPage
+    Formulaire : Nom + Email + Mot de passe (min 6 caractères)
+    Après inscription réussie :
+      - Stocke le JWT dans sessionStorage
+      - Crée le profil coach dans app_storage :
+          key = "coach_profile:{uid}"
+          value = { name, email, plan: "free", studentCount: 0 }
+      - Connecte directement le coach
+    Lien "Déjà un compte ? Se connecter" vers la connexion
+
+  CoachLoginPage (modifiée)
+    Ajout du lien "Pas encore de compte ? Créer un compte gratuit"
+    Prop onGoSignup ajoutée (optionnelle, rétrocompatible)
+
+  LandingPage (modifiée)
+    Ajout du lien "Nouveau coach ? Créer un compte gratuit"
+    Suppression de l'ancien prop showPin (plus utilisé)
+
+  PaymentSuccessPage
+    Page affichée après paiement Stripe réussi (#success dans l'URL)
+    Message de bienvenue + bouton retour vers l'espace coach
+
+  CoachApp (modifiée)
+    Route "#success" ajoutée → PaymentSuccessPage
+    Suppression du state showPin (remplacé par CoachAuthPage)
+    Ajout de handleUnlock() centralisé
+
+2.2  LIMITE FREEMIUM 3 ÉLÈVES
+-------------------------------
+Fichier modifié : src/App.jsx
+
+KEYS mis à jour :
+  coachProfile: (uid) => `coach_profile:${uid}`
+  Nouveau namespace dans app_storage pour le profil coach.
+
+Logique ajoutée dans CoachApp_Inner :
+
+  Chargement du profil au montage
+    useEffect → safeGet(KEYS.coachProfile(uid)) → state coachProfile
+    Renseigne le plan (free/pro) et le compteur d'élèves.
+
+  handleAddStudent()
+    Vérifie : coachProfile.plan === "free" ET students.length >= 3
+    Si limite atteinte → showUpgrade = true (UpgradeModal)
+    Sinon → showAdd = true (AddStudentModal normal)
+    Remplace tous les anciens setShowAdd(true) dans l'interface.
+
+  updateStudentCount(delta)
+    Incrémente (+1) à chaque création d'élève réussie
+    Décrémente (-1) à chaque suppression d'élève
+    Met à jour le profil dans Supabase ET le state local
+
+  onDeleted (StudentDetailPage)
+    Mis à jour pour appeler updateStudentCount(-1) avant de recharger
+
+  UpgradeModal
+    Modal affiché quand la limite est atteinte :
+      - Alerte rouge "limite de 3 élèves"
+      - Prix 39€/mois avec sous-titre "Résiliation à tout moment"
+      - Bouton "Passer à Pro — 39€/mois" → handleUpgrade()
+
+  Badge plan dans la Sidebar
+    "FREE" (gris) ou "PRO" (fond acid jaune) affiché à côté de
+    "Studio Coaching" si le profil est chargé.
+
+2.3  INTÉGRATION STRIPE CHECKOUT
+----------------------------------
+
+  api/create-checkout-session.js  (Vercel Serverless Function)
+    Méthode : POST
+    Entrée  : { coachId, email }
+    Actions :
+      - Crée une Stripe Checkout Session en mode "subscription"
+      - Prix : STRIPE_PRICE_ID (variable d'env)
+      - Metadata : { coachId } → utilisé par le webhook
+      - success_url : {APP_URL}/#success
+      - cancel_url  : {APP_URL}/#cancel
+    Sortie  : { url } → le frontend redirige vers cette URL
+
+  api/stripe-webhook.js  (Vercel Serverless Function)
+    Méthode : POST (appelé par Stripe)
+    Événement traité : checkout.session.completed
+    Actions :
+      - Vérifie la signature HMAC avec STRIPE_WEBHOOK_SECRET
+        (sécurité : rejette toute requête non signée par Stripe)
+      - Récupère coachId depuis session.metadata
+      - Lit le profil coach dans Supabase via service key
+      - Met à jour : plan → "pro", upgradedAt → timestamp ISO
+    Note : bodyParser désactivé (config.api.bodyParser = false)
+      car Stripe requiert le corps brut pour la vérification HMAC
+
+  handleUpgrade() dans CoachApp_Inner
+    Appelle /api/create-checkout-session en POST
+    Redirige vers l'URL Stripe retournée
+    Gestion d'erreur : alert si l'API ne répond pas
+
+2.4  FICHIERS DE CONFIGURATION
+--------------------------------
+
+  .env.example  (nouveau)
+    Toutes les variables d'environnement documentées avec leur source :
+      VITE_SUPABASE_URL         → Settings → API → Project URL
+      VITE_SUPABASE_KEY         → clé anon publique
+      SUPABASE_SERVICE_KEY      → clé service (backend uniquement)
+      STRIPE_SECRET_KEY         → Developers → API keys
+      STRIPE_PRICE_ID           → Products → ton produit → Price ID
+      STRIPE_WEBHOOK_SECRET     → Webhooks → Signing secret
+      VITE_APP_URL              → URL de production
+
+  vercel.json  (modifié)
+    CSP étendue pour autoriser Stripe :
+      script-src  : + https://js.stripe.com
+      connect-src : + https://api.stripe.com
+      frame-src   : + https://js.stripe.com (requis par Stripe.js)
+
+  package.json  (modifié)
+    Ajout de la dépendance : "stripe": "^16.0.0"
+
+
+════════════════════════════════════════════════════════════════
+PARTIE 2 — CE QUI RESTE À FAIRE (actions manuelles)
+════════════════════════════════════════════════════════════════
+
+Toutes ces étapes nécessitent un accès humain aux dashboards
+Supabase et Stripe. Elles ne peuvent pas être automatisées.
+
+────────────────────────────────────────────────────────────────
+ACTION 1 — Exécuter la migration RLS dans Supabase
+────────────────────────────────────────────────────────────────
+  STATUT : ⏳ EN ATTENTE
+
+  Où : Supabase Dashboard → SQL Editor
+
+  Quoi :
+    1. Ouvrir le fichier supabase/migrations/001_enable_rls.sql
+    2. Copier tout le contenu
+    3. Coller dans le SQL Editor Supabase
+    4. Cliquer "Run"
+
+  Ensuite, back-fill des données existantes :
+    a. Aller dans Supabase → Authentication → Users
+    b. Copier l'UUID du coach (colonne "UID")
+    c. Exécuter dans le SQL Editor :
+
+       UPDATE app_storage
+         SET coach_id = '<TON-UUID-ICI>'
+         WHERE coach_id IS NULL;
+
+    d. Vérifier : SELECT COUNT(*) FROM app_storage WHERE coach_id IS NULL;
+       → doit retourner 0
+
+  ⚠️  TANT QUE CETTE ÉTAPE N'EST PAS FAITE :
+      - La RLS est absente, les données sont exposées
+      - Après activation, les données sans coach_id seront invisibles
+        (c'est pourquoi le back-fill est OBLIGATOIRE avant d'activer)
+
+────────────────────────────────────────────────────────────────
+ACTION 2 — Créer le produit Stripe
+────────────────────────────────────────────────────────────────
+  STATUT : ⏳ EN ATTENTE
+
+  Où : dashboard.stripe.com → Products
+
+  Quoi :
+    1. "Add Product"
+    2. Nom : "Fonte Coaching Pro"
+    3. Prix : 39,00 € / mois (Recurring, Monthly)
+    4. Cliquer sur le produit créé
+    5. Dans "Pricing", copier le Price ID → format "price_xxxxx"
+       C'est la valeur de STRIPE_PRICE_ID
+
+────────────────────────────────────────────────────────────────
+ACTION 3 — Configurer le webhook Stripe
+────────────────────────────────────────────────────────────────
+  STATUT : ⏳ EN ATTENTE
+
+  Où : dashboard.stripe.com → Developers → Webhooks
+
+  Quoi :
+    1. "Add endpoint"
+    2. Endpoint URL :
+         https://fonte-coaching.vercel.app/api/stripe-webhook
+    3. Événements à écouter :
+         checkout.session.completed
+    4. Créer l'endpoint
+    5. Copier le "Signing secret" (commence par "whsec_")
+       C'est la valeur de STRIPE_WEBHOOK_SECRET
+
+────────────────────────────────────────────────────────────────
+ACTION 4 — Ajouter les variables d'env dans Vercel
+────────────────────────────────────────────────────────────────
+  STATUT : ⏳ EN ATTENTE
+
+  Où : vercel.com → Projet fonte-coaching → Settings → Environment Variables
+
+  Variables à ajouter (copier depuis .env.example et remplir) :
+
+    VITE_SUPABASE_URL         = https://xxxx.supabase.co
+    VITE_SUPABASE_KEY         = eyJ... (clé anon)
+    SUPABASE_SERVICE_KEY      = eyJ... (clé service — JAMAIS dans le frontend)
+    STRIPE_SECRET_KEY         = sk_live_... ou sk_test_...
+    STRIPE_PRICE_ID           = price_...
+    STRIPE_WEBHOOK_SECRET     = whsec_...
+    VITE_APP_URL              = https://fonte-coaching.vercel.app
+
+  ⚠️  SUPABASE_SERVICE_KEY donne accès à TOUTES les données en
+      contournant le RLS. Elle ne doit exister que côté serveur
+      (Vercel). Ne jamais la préfixer avec VITE_ (qui l'exposerait
+      dans le bundle JS du navigateur).
+
+────────────────────────────────────────────────────────────────
+ACTION 5 — Redéployer sur Vercel
+────────────────────────────────────────────────────────────────
+  STATUT : ⏳ EN ATTENTE (dépend des actions 2, 3, 4)
+
+  Quoi :
+    - Merger la branche claude/practical-hamilton-1sj7y5 dans main
+    - Vercel déclenchera un redéploiement automatique
+    - Ou : git push sur main → Vercel CI/CD
+
+────────────────────────────────────────────────────────────────
+ACTION 6 — Test end-to-end à faire manuellement
+────────────────────────────────────────────────────────────────
+  STATUT : ⏳ EN ATTENTE (dépend des actions 1 à 5)
+
+  Checklist de vérification :
+
+  AUTH
+  [ ] Créer un compte coach → l'app redirige vers le tableau de bord
+  [ ] Se déconnecter → retour page d'accueil
+  [ ] Se reconnecter avec email/mot de passe → ça fonctionne toujours
+
+  FREEMIUM
+  [ ] Créer 3 élèves → ok
+  [ ] Tenter de créer un 4ème élève → UpgradeModal s'affiche
+  [ ] Le modal affiche bien "3 élèves" et "39€/mois"
+  [ ] Supprimer un élève → le compteur redescend à 2
+
+  STRIPE
+  [ ] Cliquer "Passer à Pro" → redirection vers Stripe Checkout
+  [ ] Utiliser la carte de test Stripe : 4242 4242 4242 4242
+  [ ] Après paiement → redirection vers /#success
+  [ ] Page "Bienvenue dans Fonte Pro" s'affiche
+  [ ] Le badge sidebar passe de FREE à PRO
+  [ ] Créer un 4ème élève → ça fonctionne maintenant
+
+  PORTAIL ÉTUDIANT
+  [ ] Le lien #student=xxx.yyy fonctionne toujours
+  [ ] L'étudiant peut envoyer des messages
+  [ ] L'étudiant ne voit pas les données des autres élèves
+
+────────────────────────────────────────────────────────────────
+ACTION 7 — (Optionnel) Tester en mode Stripe Test
+────────────────────────────────────────────────────────────────
+  STATUT : ⏳ RECOMMANDÉ avant la mise en production
+
+  Quoi :
+    - Utiliser les clés Stripe en mode "Test" (sk_test_...)
+    - Carte de test : 4242 4242 4242 4242 / exp: 12/34 / CVC: 123
+    - Vérifier que le webhook est bien reçu dans
+      Stripe Dashboard → Webhooks → ton endpoint → Recent deliveries
+    - Vérifier que le profil coach passe bien en plan "pro"
+      dans Supabase → Table Editor → app_storage
+
+
+════════════════════════════════════════════════════════════════
+PARTIE 3 — RÉCAPITULATIF DES FICHIERS TOUCHÉS
+════════════════════════════════════════════════════════════════
+
+  CRÉÉS
+  ├── supabase/migrations/001_enable_rls.sql   (migration RLS)
+  ├── api/create-checkout-session.js            (Vercel serverless)
+  ├── api/stripe-webhook.js                     (Vercel serverless)
+  ├── .env.example                              (variables d'env)
+  ├── COMPTE_RENDU_SECURITE.txt                 (audit sécurité)
+  └── BILAN_TRAVAUX.txt                         (ce document)
+
+  MODIFIÉS
+  ├── src/App.jsx          (+239 lignes — inscription, freemium, Stripe)
+  ├── package.json         (+ dépendance stripe@^16.0.0)
+  ├── package-lock.json    (mis à jour automatiquement)
+  └── vercel.json          (CSP étendue pour Stripe)
+
+
+════════════════════════════════════════════════════════════════
+PARTIE 4 — ÉTAT DES BRANCHES GIT
+════════════════════════════════════════════════════════════════
+
+  claude/fonte-coaching-security-r6x2ku
+    → Corrections de sécurité (RLS SQL + Math.random)
+    → Mergée dans claude/practical-hamilton-1sj7y5 via PR #1
+
+  claude/practical-hamilton-1sj7y5  ← BRANCHE ACTIVE
+    → Contient TOUT : sécurité + monétisation
+    → Dernier commit : de58d27
+    → À merger dans main pour déploiement
+
+================================================================
+Fin du bilan
+================================================================
