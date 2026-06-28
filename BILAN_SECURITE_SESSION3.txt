@@ -1,0 +1,353 @@
+═══════════════════════════════════════════════════════════════════════════════
+  BILAN COMPLET — FONTE COACHING PWA
+  Sessions 1, 2 et 3 — Sécurité + Monétisation + Re-Audit
+  Branche : claude/practical-hamilton-1sj7y5
+  Date    : 28 juin 2026
+═══════════════════════════════════════════════════════════════════════════════
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SESSION 1 — AUDIT DE SÉCURITÉ INITIAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CORRECTION 1 — Row Level Security Supabase
+───────────────────────────────────────────
+Fichier : supabase/migrations/001_enable_rls.sql (créé)
+
+Problème : La table app_storage n'avait aucune protection RLS. N'importe quel
+utilisateur pouvait lire ou modifier les données de n'importe quel coach.
+
+Ce qui a été fait :
+  • Ajout de la colonne coach_id UUID DEFAULT auth.uid() à app_storage
+    → Chaque ligne insérée par un coach authentifié reçoit automatiquement
+      son UUID dans coach_id, sans modification du code frontend.
+  • Activation de RLS : ALTER TABLE app_storage ENABLE ROW LEVEL SECURITY
+  • 4 politiques pour les coaches (rôle "authenticated") :
+    - coach_select  : SELECT WHERE coach_id = auth.uid()
+    - coach_insert  : INSERT WITH CHECK (coach_id = auth.uid())
+    - coach_update  : UPDATE WHERE coach_id = auth.uid()
+    - coach_delete  : DELETE WHERE coach_id = auth.uid()
+  • 3 politiques pour les élèves (rôle "anon") :
+    - student_select : SELECT sur les clés commençant par "student:" ou "chat:"
+    - student_chat_insert : INSERT sur les clés commençant par "chat:"
+    - student_chat_update : UPDATE sur les clés commençant par "chat:"
+  • Les clés sensibles (students:index, gyms:index, planning:sessions,
+    coach_profile:*) restent inaccessibles au rôle anon.
+
+CORRECTION 2 — Tokens étudiants cryptographiquement sécurisés
+──────────────────────────────────────────────────────────────
+Fichier : src/App.jsx
+
+Problème : Les tokens d'accès élèves étaient générés avec Math.random(), qui
+n'est pas cryptographiquement sécurisé et peut être prévisible.
+
+Ce qui a été fait :
+  • Remplacement de Math.random() par crypto.getRandomValues() pour la
+    génération des IDs et tokens élèves.
+  • Utilisation de crypto.randomUUID() pour les access tokens (UUID v4).
+  • Les IDs et tokens sont normalisés en minuscules pour éviter les
+    problèmes de correspondance dans les URLs.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SESSION 2 — SYSTÈME DE MONÉTISATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FONCTIONNALITÉ 1 — Page d'inscription coach
+────────────────────────────────────────────
+Fichier : src/App.jsx (composant CoachAuthPage + CoachSignupPage)
+
+  • Nouveau composant CoachAuthPage : affiche une landing page avec deux
+    boutons "Se connecter" et "Créer un compte".
+  • Nouveau composant CoachSignupPage : formulaire email + mot de passe +
+    confirmation, appelle supabase.auth.signUp() via POST /auth/v1/signup.
+  • À l'inscription réussie :
+    - Le JWT est stocké dans sessionStorage (clé "coach_token").
+    - Un profil coach_profile:{uid} est créé dans app_storage avec :
+      { name: "", email: "", plan: "free", studentCount: 0 }
+  • Gestion des erreurs Supabase (email déjà utilisé, mot de passe trop
+    court, etc.) affichées sous le formulaire.
+
+FONCTIONNALITÉ 2 — Limite freemium 3 élèves
+────────────────────────────────────────────
+Fichier : src/App.jsx (CoachApp_Inner + UpgradeModal)
+
+  • Le profil coach (coach_profile:{uid}) contient le champ "plan" : "free"
+    ou "pro".
+  • Lors de l'ajout d'un élève, si plan === "free" et students.length >= 3,
+    l'ajout est bloqué côté frontend et la modal d'upgrade s'affiche.
+  • La sidebar affiche un badge FREE / PRO selon le plan courant.
+  • Le compteur studentCount du profil est mis à jour à chaque ajout/
+    suppression d'élève (+1 / -1).
+
+FONCTIONNALITÉ 3 — Intégration Stripe Checkout
+───────────────────────────────────────────────
+Fichiers créés :
+  • api/create-checkout-session.js (Vercel Serverless Function)
+  • api/stripe-webhook.js (Vercel Serverless Function)
+Fichiers modifiés :
+  • vercel.json (ajout des headers CSP pour Stripe)
+  • package.json (dépendance "stripe": "^16.0.0")
+  • .env.example (documentation des variables d'env Stripe)
+
+Flux de paiement :
+  1. Coach clique "Passer à Pro" → handleUpgrade() appelle
+     POST /api/create-checkout-session
+  2. Le serverless crée une Stripe Checkout Session (mode subscription,
+     STRIPE_PRICE_ID) et renvoie l'URL de paiement.
+  3. Le coach est redirigé vers Stripe, paie, puis revient sur /#success.
+  4. Stripe appelle POST /api/stripe-webhook avec l'événement
+     checkout.session.completed.
+  5. Le webhook vérifie la signature HMAC, lit coachId dans les métadonnées,
+     et met à jour coach_profile:{coachId} → plan: "pro" via la clé service
+     Supabase (bypass RLS).
+
+Composants UI ajoutés :
+  • UpgradeModal : modal avec explication du plan Pro et bouton de paiement.
+  • PaymentSuccessPage : page affichée après paiement réussi (hash #success).
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SESSION 3 — RE-AUDIT ET CORRECTIONS CRITIQUES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+12 vulnérabilités identifiées et corrigées.
+
+CRITIQUE #1 — Endpoint Stripe sans authentification
+─────────────────────────────────────────────────────
+Fichier : api/create-checkout-session.js
+
+Problème : Le coachId était lu directement depuis req.body. N'importe qui
+pouvait envoyer une requête avec le coachId d'un autre coach et déclencher
+une session Stripe à son nom.
+
+Correction :
+  • Suppression totale de la lecture de coachId depuis le body.
+  • Ajout de getAuthenticatedCoachId(authHeader) : appelle
+    GET ${VITE_SUPABASE_URL}/auth/v1/user avec le Bearer token du header
+    Authorization pour obtenir l'UUID vérifié côté serveur.
+  • Le coachId utilisé dans les métadonnées Stripe est désormais l'UUID
+    retourné par Supabase, pas une valeur fournie par le client.
+  • Réponse 401 si le token est absent, expiré ou invalide.
+
+CRITIQUE #2 — Signature Stripe webhook jamais vérifiée en pratique
+────────────────────────────────────────────────────────────────────
+Fichier : api/stripe-webhook.js
+
+Problème : Avec bodyParser: false, Vercel ne peuple pas req.body. Le code
+utilisait req.body (undefined), ce qui faisait échouer silencieusement la
+vérification de signature HMAC. N'importe qui pouvait forger un webhook.
+
+Correction :
+  • Ajout de getRawBody(req) qui collecte le corps brut via async iterator :
+      const chunks = [];
+      for await (const chunk of req) { chunks.push(...); }
+      return Buffer.concat(chunks);
+  • Le rawBody est passé à stripe.webhooks.constructEvent() pour la
+    vérification HMAC correcte.
+
+CRITIQUE #3 — Politique RLS coach_insert avec clause IS NULL
+─────────────────────────────────────────────────────────────
+Fichier : supabase/migrations/002_fix_rls_policies.sql (créé)
+
+Problème : La migration 001 créait la politique coach_insert avec :
+  WITH CHECK (coach_id = auth.uid() OR coach_id IS NULL)
+La clause OR coach_id IS NULL permettait à un coach d'insérer des lignes
+sans propriétaire (coach_id NULL), lisibles par tous les coaches.
+
+Correction :
+  DROP POLICY IF EXISTS "coach_insert" ON app_storage;
+  CREATE POLICY "coach_insert" ON app_storage
+    FOR INSERT TO authenticated
+    WITH CHECK (coach_id = auth.uid());
+
+⚠️  ACTION REQUISE : Exécuter ce fichier SQL dans le SQL Editor Supabase.
+
+HAUTE #4 — 'unsafe-inline' dans script-src (XSS)
+──────────────────────────────────────────────────
+Fichier : vercel.json
+
+Problème : La Content-Security-Policy autorisait 'unsafe-inline' dans
+script-src, ce qui neutralise partiellement la protection XSS.
+
+Correction :
+  • Suppression de 'unsafe-inline' de script-src (inutile pour un build
+    Vite production — le code est bundlé dans un fichier .js externe).
+  • Avant : script-src 'self' 'unsafe-inline' https://js.stripe.com
+  • Après  : script-src 'self' https://js.stripe.com
+
+HAUTE #5 — frame-src manquant m.stripe.network (3D Secure cassé)
+─────────────────────────────────────────────────────────────────
+Fichier : vercel.json
+
+Problème : Le domaine m.stripe.network était absent de frame-src, bloquant
+les iframes 3D Secure pour certaines cartes bancaires européennes.
+
+Correction :
+  • Ajout de https://m.stripe.network dans frame-src.
+
+MOYENNE #6 — Flag coach_auth dans sessionStorage spoofable
+───────────────────────────────────────────────────────────
+Fichier : src/App.jsx
+
+Problème : L'état d'authentification du coach était stocké via un flag
+coach_auth = "1" dans sessionStorage. Un utilisateur pouvait ouvrir la
+console et taper sessionStorage.setItem("coach_auth","1") pour bypass
+l'écran de connexion.
+
+Correction :
+  • Suppression complète du flag coach_auth.
+  • Ajout de isTokenValid() : décode le JWT depuis sessionStorage, vérifie
+    que exp * 1000 > Date.now() avant de considérer la session active.
+  • CoachApp initialise son état avec useState(isTokenValid) au lieu de
+    lire coach_auth.
+
+MOYENNE #7 — Expiry JWT non vérifiée dans getCoachUid()
+─────────────────────────────────────────────────────────
+Fichier : src/App.jsx
+
+Problème : getCoachUid() renvoyait l'UUID même si le JWT était expiré, ce
+qui permettait à un coach déconnecté (token périmé) de continuer à utiliser
+certaines fonctionnalités.
+
+Correction :
+  • getCoachUid() vérifie maintenant payload.exp * 1000 < Date.now().
+  • Retourne null si le token est expiré.
+
+MOYENNE #8 — Décodage base64url JWT incorrect
+──────────────────────────────────────────────
+Fichier : src/App.jsx
+
+Problème : Le payload JWT était décodé avec atob() directement. Les JWT
+utilisent base64url (caractères - et _ au lieu de + et /), ce qui causait
+des erreurs de décodage sur certains tokens.
+
+Correction :
+  • Ajout de decodeJWTPayload(token) avec remplacement des caractères :
+      token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")
+  • Toutes les lectures de payload JWT passent par cette fonction.
+
+MOYENNE #9 — handleUpgrade() envoyait coachId dans le body
+────────────────────────────────────────────────────────────
+Fichier : src/App.jsx
+
+Problème : L'appel frontend envoyait { coachId, email } dans le body de
+POST /api/create-checkout-session. Corollaire de la CRITIQUE #1.
+
+Correction :
+  • Le body n'envoie plus que { email }.
+  • Le JWT est transmis dans le header Authorization: Bearer <token>.
+
+BASSE #10 — Validation inputs AddStudentModal absente
+──────────────────────────────────────────────────────
+Fichier : src/App.jsx (AddStudentModal)
+
+Problème : Les champs nom, âge, taille et poids n'avaient aucune validation
+côté client. Des valeurs absurdes ou des chaînes très longues pouvaient être
+envoyées à Supabase.
+
+Correction :
+  • Nom : requis, max 100 caractères.
+  • Âge : optionnel, 5–120 ans si renseigné.
+  • Taille : optionnel, 50–300 cm si renseigné.
+  • Poids : optionnel, 10–500 kg si renseigné.
+  • État error affiché sous le formulaire.
+
+BASSE #11 — Variables d'env non validées au démarrage serverless
+─────────────────────────────────────────────────────────────────
+Fichiers : api/create-checkout-session.js, api/stripe-webhook.js
+
+Problème : Si STRIPE_SECRET_KEY ou STRIPE_PRICE_ID n'étaient pas définis,
+les fonctions crashaient avec une erreur opaque à l'exécution.
+
+Correction :
+  • Vérification explicite de chaque variable d'env dès le début du handler.
+  • Réponse 500 avec message clair si une variable manque.
+  • Les erreurs sont loggées avec console.error pour faciliter le debug
+    dans les logs Vercel.
+
+BASSE #12 — Constante SB_HEADERS inutilisée et trompeuse
+──────────────────────────────────────────────────────────
+Fichier : src/App.jsx
+
+Problème : La constante SB_HEADERS était définie mais jamais utilisée dans
+le code. Elle exposait le pattern d'utilisation de la clé anon Supabase
+sans servir à rien, et pouvait induire un développeur en erreur.
+
+Correction :
+  • Suppression complète de SB_HEADERS.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  RÉCAPITULATIF DES FICHIERS MODIFIÉS / CRÉÉS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  CRÉÉS
+  ─────
+  supabase/migrations/001_enable_rls.sql       ← Session 1 : RLS initial
+  supabase/migrations/002_fix_rls_policies.sql ← Session 3 : correction IS NULL
+  api/create-checkout-session.js               ← Session 2 + 3 : Stripe Checkout
+  api/stripe-webhook.js                        ← Session 2 + 3 : Stripe Webhook
+  .env.example                                 ← Session 2 : documentation env
+
+  MODIFIÉS
+  ────────
+  src/App.jsx          ← Sessions 1, 2 et 3 (crypto, auth, freemium, UI)
+  vercel.json          ← Sessions 2 et 3 (CSP Stripe, unsafe-inline)
+  package.json         ← Session 2 (dépendance stripe ^16.0.0)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ACTIONS MANUELLES RESTANTES (à faire par Eric)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  1. SUPABASE — Exécuter les migrations SQL
+     ────────────────────────────────────────
+     Dans Supabase Dashboard → SQL Editor, exécuter dans l'ordre :
+       a. supabase/migrations/001_enable_rls.sql
+       b. supabase/migrations/002_fix_rls_policies.sql
+
+  2. STRIPE — Configurer le webhook
+     ─────────────────────────────────
+     Dans Stripe Dashboard → Developers → Webhooks :
+       • Ajouter l'endpoint : https://fonte-coaching.vercel.app/api/stripe-webhook
+       • Événement à écouter : checkout.session.completed
+       • Copier le "Signing secret" (whsec_...) → variable STRIPE_WEBHOOK_SECRET
+
+  3. VERCEL — Configurer les variables d'environnement
+     ─────────────────────────────────────────────────
+     Dans Vercel Dashboard → Project → Settings → Environment Variables :
+       • VITE_SUPABASE_URL       = https://xxxx.supabase.co
+       • VITE_SUPABASE_KEY       = eyJ... (clé anon publique)
+       • SUPABASE_SERVICE_KEY    = eyJ... (clé service — JAMAIS préfixée VITE_)
+       • STRIPE_SECRET_KEY       = sk_live_...
+       • STRIPE_PRICE_ID         = price_...
+       • STRIPE_WEBHOOK_SECRET   = whsec_...
+       • VITE_APP_URL            = https://fonte-coaching.vercel.app
+
+  4. STRIPE — Créer le produit Pro
+     ─────────────────────────────
+     Dans Stripe Dashboard → Products → Create Product :
+       • Nom : "Fonte Coaching Pro"
+       • Prix : 39,00 € / mois (récurrent)
+       • Copier le Price ID (price_...) → variable STRIPE_PRICE_ID
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ÉTAT DE SÉCURITÉ FINAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ✅ RLS activé sur app_storage (isolation par coach)
+  ✅ Tokens élèves générés avec crypto.getRandomValues()
+  ✅ JWT expiry vérifié côté client
+  ✅ Décodage base64url JWT correct
+  ✅ Authentification serveur sur l'endpoint Stripe
+  ✅ Signature HMAC webhook Stripe vérifiée correctement
+  ✅ CSP sans 'unsafe-inline', frame-src complet
+  ✅ Variables d'env validées dans les fonctions serverless
+  ✅ Validation des inputs formulaire AddStudentModal
+  ✅ Aucun secret dans le code source
+
+  ⚠️  APRÈS migration SQL 002 : la politique coach_insert sera aussi corrigée.
+
+═══════════════════════════════════════════════════════════════════════════════
