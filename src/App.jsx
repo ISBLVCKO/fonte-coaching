@@ -580,6 +580,13 @@ export default function CoachApp() {
       if (hash === "#join") { setRoute({ view: "onboarding" }); return; }
       // Page de confirmation après paiement Stripe réussi
       if (hash === "#success") { setRoute({ view: "payment-success" }); return; }
+      // Erreur Supabase renvoyée dans le hash (ex: lien de confirmation expiré)
+      if (hash.includes("error=")) {
+        const params = new URLSearchParams(hash.replace(/^#/, ""));
+        const desc = params.get("error_description") || params.get("error") || "Une erreur est survenue.";
+        setRoute({ view: "auth-error", message: decodeURIComponent(desc.replace(/\+/g, " ")) });
+        return;
+      }
       setRoute({ view: "coach" });
     }
     resolve();
@@ -600,6 +607,7 @@ export default function CoachApp() {
   }
 
   if (route.view === "loading") return <Shell><LoadingState /></Shell>;
+  if (route.view === "auth-error") return <Shell><AuthErrorPage message={route.message} /></Shell>;
   if (route.view === "student-portal") return <Shell><StudentPortal studentId={route.studentId} token={route.token} /></Shell>;
   if (route.view === "onboarding") return <Shell><OnboardingPage /></Shell>;
   if (route.view === "payment-success") return <Shell><PaymentSuccessPage /></Shell>;
@@ -760,6 +768,21 @@ function PaymentSuccessPage() {
         <h2 style={{ marginTop: 20 }}>Bienvenue dans Fonte Pro !</h2>
         <p className="muted" style={{ lineHeight: 1.6 }}>Ton abonnement est actif. Tu peux maintenant gérer un nombre illimité d'élèves.</p>
         <button className="btn primary" style={{ marginTop: 24 }} onClick={() => { window.location.hash = ""; }}>Accéder à mon espace</button>
+      </div>
+    </div>
+  );
+}
+
+// Page d'erreur affichée quand Supabase renvoie une erreur dans le hash (#error=...)
+function AuthErrorPage({ message }) {
+  return (
+    <div className="pin-gate">
+      <div className="pin-card login-card" style={{ textAlign: "center" }}>
+        <div className="pin-logo" style={{ justifyContent: "center" }}><div className="mark" /><span className="brand-name">Fonte</span></div>
+        <p className="pin-label" style={{ color: "#e05c5c", marginTop: 24 }}>Lien invalide ou expiré</p>
+        <p className="muted" style={{ lineHeight: 1.6, marginTop: 12 }}>{message}</p>
+        <p className="muted" style={{ marginTop: 8 }}>Crée un nouveau compte ou reconnecte-toi.</p>
+        <button className="btn primary full" style={{ marginTop: 24 }} onClick={() => { window.location.hash = ""; window.location.reload(); }}>Retour à l'accueil</button>
       </div>
     </div>
   );
