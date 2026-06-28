@@ -1,43 +1,55 @@
 // Vercel Serverless Function — Crée une session de paiement Stripe Checkout
-// Appelée depuis le frontend quand le coach clique sur "Passer à Pro"
+// Authentifie le coach via son JWT Supabase (header Authorization: Bearer <token>)
+// Le coachId est extrait du token vérifié côté serveur — jamais du body.
 const Stripe = require("stripe");
 
+async function getAuthenticatedCoachId(authHeader) {
+  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
+  const token = authHeader.slice(7);
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.VITE_SUPABASE_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+
+  const res = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) return null;
+  const user = await res.json();
+  return user?.id || null;
+}
+
 module.exports = async function handler(req, res) {
-  // Autoriser uniquement les requêtes POST
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Méthode non autorisée" });
   }
 
-  const { coachId, email } = req.body || {};
-
-  if (!coachId) {
-    return res.status(400).json({ error: "coachId manquant" });
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  const priceId = process.env.STRIPE_PRICE_ID;
+  if (!stripeKey || !priceId) {
+    console.error("Variables d'environnement Stripe manquantes");
+    return res.status(500).json({ error: "Configuration serveur incomplète" });
   }
 
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-    apiVersion: "2024-06-20",
-  });
+  const coachId = await getAuthenticatedCoachId(req.headers.authorization);
+  if (!coachId) {
+    return res.status(401).json({ error: "Non authentifié" });
+  }
 
+  const { email } = req.body || {};
+
+  const stripe = new Stripe(stripeKey, { apiVersion: "2024-06-20" });
   const appUrl = process.env.VITE_APP_URL || "https://fonte-coaching.vercel.app";
 
   try {
-    // Créer la session Stripe Checkout en mode abonnement
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       payment_method_types: ["card"],
-      line_items: [
-        {
-          price: process.env.STRIPE_PRICE_ID,
-          quantity: 1,
-        },
-      ],
-      // Pré-remplir l'email si disponible
+      line_items: [{ price: priceId, quantity: 1 }],
       customer_email: email || undefined,
-      // Métadonnées pour identifier le coach dans le webhook
-      metadata: {
-        coachId,
-      },
-      // URLs de redirection après paiement
+      metadata: { coachId },
       success_url: `${appUrl}/#success`,
       cancel_url: `${appUrl}/#cancel`,
     });

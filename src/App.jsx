@@ -17,12 +17,6 @@ function getAuthHeaders() {
   };
 }
 
-const SB_HEADERS = {
-  apikey: SUPABASE_KEY,
-  Authorization: `Bearer ${SUPABASE_KEY}`,
-  "Content-Type": "application/json",
-};
-
 async function authSignIn(email, password) {
   const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: "POST",
@@ -47,11 +41,30 @@ async function authSignUp(email, password) {
   return res.json();
 }
 
-// Décoder l'UUID du coach depuis le JWT stocké en session (sans vérification de signature)
+// Décoder le payload JWT sans vérifier la signature (uniquement pour l'UX côté client).
+// La vérification réelle est faite par Supabase RLS côté serveur à chaque requête.
+function decodeJWTPayload(token) {
+  try { return JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))); } catch { return null; }
+}
+
+// Retourne l'UUID du coach si un JWT valide et non expiré est en session, sinon null.
 function getCoachUid() {
   const token = sessionStorage.getItem("coach_token");
   if (!token) return null;
-  try { return JSON.parse(atob(token.split(".")[1])).sub; } catch { return null; }
+  const payload = decodeJWTPayload(token);
+  if (!payload) return null;
+  // Rejeter les tokens expirés (protection côté client — Supabase le vérifie aussi serveur)
+  if (typeof payload.exp === "number" && payload.exp * 1000 < Date.now()) return null;
+  return payload.sub || null;
+}
+
+// Vérifie qu'un JWT coach est présent et non expiré (pour l'initialisation du state React).
+function isTokenValid() {
+  const token = sessionStorage.getItem("coach_token");
+  if (!token) return false;
+  const payload = decodeJWTPayload(token);
+  if (!payload || typeof payload.exp !== "number") return false;
+  return payload.exp * 1000 > Date.now();
 }
 
 async function safeGet(key) {
@@ -555,13 +568,15 @@ function useIsMobile() {
 export default function CoachApp() {
   const [route, setRoute] = useState({ view: "loading" });
   const [students, setStudents] = useState([]);
-  const [coachUnlocked, setCoachUnlocked] = useState(() => sessionStorage.getItem("coach_auth") === "1");
+  // Initialisation basée sur la validité réelle du JWT (expiration incluse), pas sur un flag spoofable
+  const [coachUnlocked, setCoachUnlocked] = useState(isTokenValid);
 
   useEffect(() => {
     function resolve() {
       const hash = window.location.hash || "";
       const mStudent = hash.match(/student=([a-z0-9]+)(?:\.([a-z0-9]+))?/i);
-      if (mStudent) { setRoute({ view: "student-portal", studentId: mStudent[1], token: mStudent[2] || "" }); return; }
+      // Normaliser en minuscules pour éviter les incohérences de validation côté serveur
+      if (mStudent) { setRoute({ view: "student-portal", studentId: mStudent[1].toLowerCase(), token: (mStudent[2] || "").toLowerCase() }); return; }
       if (hash === "#join") { setRoute({ view: "onboarding" }); return; }
       // Page de confirmation après paiement Stripe réussi
       if (hash === "#success") { setRoute({ view: "payment-success" }); return; }
@@ -581,8 +596,7 @@ export default function CoachApp() {
   useEffect(() => { loadIndex(); }, [loadIndex]);
 
   function handleUnlock() {
-    sessionStorage.setItem("coach_auth", "1");
-    setCoachUnlocked(true);
+    setCoachUnlocked(true); // le JWT est déjà en sessionStorage à ce stade
   }
 
   if (route.view === "loading") return <Shell><LoadingState /></Shell>;
@@ -817,15 +831,22 @@ function CoachApp_Inner({ students, refreshIndex }) {
     }
   }
 
-  // Lancer le checkout Stripe via la serverless function Vercel
+  // Lancer le checkout Stripe via la serverless function Vercel.
+  // Le coachId est dérivé côté serveur depuis le JWT vérifié — jamais depuis le body.
   async function handleUpgrade() {
     try {
-      const uid = getCoachUid();
+      const jwt = sessionStorage.getItem("coach_token");
+      if (!jwt) { alert("Session expirée. Reconnecte-toi."); return; }
       const res = await fetch("/api/create-checkout-session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coachId: uid, email: coachProfile?.email || "" }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${jwt}`,
+        },
+        // L'email sert uniquement à pré-remplir le formulaire Stripe (non critique)
+        body: JSON.stringify({ email: coachProfile?.email || "" }),
       });
+      if (res.status === 401) { alert("Session expirée. Reconnecte-toi."); return; }
       const { url } = await res.json();
       if (url) window.location.href = url;
     } catch {
@@ -940,7 +961,6 @@ function ApplySessionModal({ session, students, onClose, onApply }) {
 function Sidebar({ section, setSection, studentCount, isMobile, navOpen, setNavOpen, coachProfile }) {
   async function logout() {
     const token = sessionStorage.getItem("coach_token");
-    sessionStorage.removeItem("coach_auth");
     sessionStorage.removeItem("coach_token");
     if (token) {
       try {
@@ -1204,11 +1224,20 @@ function OnboardingPage() {
 
 function AddStudentModal({ onClose, onCreated }) {
   const [name, setName] = useState(""); const [sex, setSex] = useState("H"); const [age, setAge] = useState("");
-  const [height, setHeight] = useState(""); const [weight, setWeight] = useState(""); const [saving, setSaving] = useState(false);
+  const [height, setHeight] = useState(""); const [weight, setWeight] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
   async function submit() {
-    if (!name.trim()) return;
+    setError("");
+    const n = name.trim();
+    // Validation des entrées avant persistance
+    if (!n || n.length > 100) { setError("Nom requis (100 caractères max)."); return; }
+    if (age !== "" && (isNaN(Number(age)) || Number(age) < 5 || Number(age) > 120)) { setError("Âge invalide (5–120 ans)."); return; }
+    if (height !== "" && (isNaN(Number(height)) || Number(height) < 50 || Number(height) > 300)) { setError("Taille invalide (50–300 cm)."); return; }
+    if (weight !== "" && (isNaN(Number(weight)) || Number(weight) < 10 || Number(weight) > 500)) { setError("Poids invalide (10–500 kg)."); return; }
     setSaving(true);
-    await onCreated(newStudent({ name: name.trim(), sex, age, height, weight }));
+    await onCreated(newStudent({ name: n, sex, age, height, weight }));
     setSaving(false);
   }
   return (
@@ -1219,10 +1248,11 @@ function AddStudentModal({ onClose, onCreated }) {
           <label className="field"><span>Nom</span><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom de l'élève" onKeyDown={(e) => e.key === "Enter" && submit()} /></label>
           <label className="field"><span>Sexe</span><select value={sex} onChange={(e) => setSex(e.target.value)}><option value="H">Homme</option><option value="F">Femme</option><option value="Autre">Autre</option></select></label>
           <div className="field-row">
-            <label className="field"><span>Âge</span><input type="number" value={age} onChange={(e) => setAge(e.target.value)} placeholder="—" /></label>
-            <label className="field"><span>Taille (cm)</span><input type="number" value={height} onChange={(e) => setHeight(e.target.value)} placeholder="—" /></label>
-            <label className="field"><span>Poids (kg)</span><input type="number" step="0.1" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="—" /></label>
+            <label className="field"><span>Âge</span><input type="number" min="5" max="120" value={age} onChange={(e) => setAge(e.target.value)} placeholder="—" /></label>
+            <label className="field"><span>Taille (cm)</span><input type="number" min="50" max="300" value={height} onChange={(e) => setHeight(e.target.value)} placeholder="—" /></label>
+            <label className="field"><span>Poids (kg)</span><input type="number" step="0.1" min="10" max="500" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="—" /></label>
           </div>
+          {error && <p className="onboarding-error">{error}</p>}
           <button className="btn primary full" onClick={submit} disabled={saving || !name.trim()}>{saving ? "Création…" : "Créer la fiche"}</button>
         </div>
       </div>
