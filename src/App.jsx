@@ -669,15 +669,15 @@ function CoachLoginPage({ onUnlock, onGoSignup }) {
           <label className="field"><span>Email</span><input type="email" autoFocus autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} /></label>
           <label className="field"><span>Mot de passe</span><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} /></label>
           {error && <p className="onboarding-error">{error}</p>}
-          <button className="btn primary full" onClick={submit} disabled={loading || !email || !password}>{loading ? "Connexion\u2026" : "Se connecter"}</button>
-          {onGoSignup && <p className="auth-switch-link">Pas encore de compte ? <button className="link-btn" onClick={onGoSignup}>Cr\u00e9er un compte gratuit</button></p>}
+          <button className="btn primary full" onClick={submit} disabled={loading || !email || !password}>{loading ? "Connexion…" : "Se connecter"}</button>
+          {onGoSignup && <p className="auth-switch-link">Pas encore de compte ? <button className="link-btn" onClick={onGoSignup}>Créer un compte gratuit</button></p>}
         </div>
       </div>
     </div>
   );
 }
 
-// Page d'inscription d'un nouveau coach (plan gratuit, 3 \u00e9l\u00e8ves max)
+// Page d'inscription d'un nouveau coach (plan gratuit, 3 élèves max)
 function CoachSignupPage({ onUnlock, onGoLogin }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -688,7 +688,7 @@ function CoachSignupPage({ onUnlock, onGoLogin }) {
 
   async function submit() {
     if (!name.trim() || !email.trim() || password.length < 6) {
-      setError("Remplis tous les champs (mot de passe : 6 caract\u00e8res minimum).");
+      setError("Remplis tous les champs (mot de passe : 6 caractères minimum).");
       return;
     }
     setLoading(true);
@@ -696,11 +696,11 @@ function CoachSignupPage({ onUnlock, onGoLogin }) {
     try {
       const data = await authSignUp(email.trim(), password);
       if (data.access_token) {
-        // Confirmation email d\u00e9sactiv\u00e9e : on connecte directement le coach
+        // Confirmation email désactivée : on connecte directement le coach
         sessionStorage.setItem("coach_token", data.access_token);
         const uid = data.user?.id;
         if (uid) {
-          // Cr\u00e9er le profil coach avec le plan gratuit
+          // Créer le profil coach avec le plan gratuit
           await safeSet(KEYS.coachProfile(uid), {
             name: name.trim(),
             email: email.trim(),
@@ -724,8 +724,8 @@ function CoachSignupPage({ onUnlock, onGoLogin }) {
       <div className="pin-gate">
         <div className="pin-card login-card">
           <div className="pin-logo"><div className="mark" /><span className="brand-name">Fonte</span></div>
-          <p className="pin-label">V\u00e9rifie ton email</p>
-          <p className="auth-confirm-text">Un email de confirmation a \u00e9t\u00e9 envoy\u00e9 \u00e0 <strong>{email}</strong>. Clique sur le lien pour activer ton compte, puis connecte-toi.</p>
+          <p className="pin-label">Vérifie ton email</p>
+          <p className="auth-confirm-text">Un email de confirmation a été envoyé à <strong>{email}</strong>. Clique sur le lien pour activer ton compte, puis connecte-toi.</p>
           <button className="btn primary full" onClick={onGoLogin}>Se connecter</button>
         </div>
       </div>
@@ -736,21 +736,21 @@ function CoachSignupPage({ onUnlock, onGoLogin }) {
     <div className="pin-gate">
       <div className="pin-card login-card">
         <div className="pin-logo"><div className="mark" /><span className="brand-name">Fonte</span></div>
-        <p className="pin-label">Cr\u00e9er un compte coach</p>
+        <p className="pin-label">Créer un compte coach</p>
         <div className="modal-form" style={{ marginTop: 20 }}>
-          <label className="field"><span>Nom</span><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ton pr\u00e9nom et nom" /></label>
+          <label className="field"><span>Nom</span><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ton prénom et nom" /></label>
           <label className="field"><span>Email</span><input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
           <label className="field"><span>Mot de passe</span><input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} /></label>
           {error && <p className="onboarding-error">{error}</p>}
-          <button className="btn primary full" onClick={submit} disabled={loading || !name || !email || !password}>{loading ? "Cr\u00e9ation\u2026" : "Cr\u00e9er mon compte"}</button>
-          <p className="auth-switch-link">D\u00e9j\u00e0 un compte ? <button className="link-btn" onClick={onGoLogin}>Se connecter</button></p>
+          <button className="btn primary full" onClick={submit} disabled={loading || !name || !email || !password}>{loading ? "Création…" : "Créer mon compte"}</button>
+          <p className="auth-switch-link">Déjà un compte ? <button className="link-btn" onClick={onGoLogin}>Se connecter</button></p>
         </div>
       </div>
     </div>
   );
 }
 
-// Page de confirmation affich\u00e9e apr\u00e8s un paiement Stripe r\u00e9ussi (#success)
+// Page de confirmation affichée après un paiement Stripe réussi (#success)
 function PaymentSuccessPage() {
   return (
     <div className="onboarding-wrap">
@@ -758,8 +758,8 @@ function PaymentSuccessPage() {
         <div className="pin-logo" style={{ justifyContent: "center" }}><div className="mark" /><span className="brand-name">Fonte</span></div>
         <div className="ob-check-circle" style={{ margin: "28px auto 0" }}><Check size={32} color="#0E0F12" strokeWidth={3} /></div>
         <h2 style={{ marginTop: 20 }}>Bienvenue dans Fonte Pro !</h2>
-        <p className="muted" style={{ lineHeight: 1.6 }}>Ton abonnement est actif. Tu peux maintenant g\u00e9rer un nombre illimit\u00e9 d'\u00e9l\u00e8ves.</p>
-        <button className="btn primary" style={{ marginTop: 24 }} onClick={() => { window.location.hash = ""; }}>Acc\u00e9der \u00e0 mon espace</button>
+        <p className="muted" style={{ lineHeight: 1.6 }}>Ton abonnement est actif. Tu peux maintenant gérer un nombre illimité d'élèves.</p>
+        <button className="btn primary" style={{ marginTop: 24 }} onClick={() => { window.location.hash = ""; }}>Accéder à mon espace</button>
       </div>
     </div>
   );
