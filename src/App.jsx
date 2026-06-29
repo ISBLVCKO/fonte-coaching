@@ -580,6 +580,24 @@ export default function CoachApp() {
       if (hash === "#join") { setRoute({ view: "onboarding" }); return; }
       // Page de confirmation après paiement Stripe réussi
       if (hash === "#success") { setRoute({ view: "payment-success" }); return; }
+      // Retour après confirmation email : Supabase renvoie #access_token=...&type=signup
+      if (hash.includes("access_token=") && hash.includes("type=signup")) {
+        const params = new URLSearchParams(hash.replace(/^#/, ""));
+        const token = params.get("access_token");
+        if (token) {
+          sessionStorage.setItem("coach_token", token);
+          // Créer le profil coach si les données d'inscription sont en attente
+          const pending = JSON.parse(sessionStorage.getItem("pending_coach") || "null");
+          if (pending?.id) {
+            safeSet(KEYS.coachProfile(pending.id), { name: pending.name, email: pending.email, plan: "free", studentCount: 0 })
+              .catch(() => {});
+            sessionStorage.removeItem("pending_coach");
+          }
+          window.location.hash = "";
+          setCoachUnlocked(true);
+        }
+        return;
+      }
       // Erreur Supabase renvoyée dans le hash (ex: lien de confirmation expiré)
       if (hash.includes("error=")) {
         const params = new URLSearchParams(hash.replace(/^#/, ""));
@@ -719,6 +737,10 @@ function CoachSignupPage({ onUnlock, onGoLogin }) {
         onUnlock();
       } else {
         // Supabase requiert une confirmation par email
+        // On sauvegarde le nom pour pouvoir créer le profil après confirmation
+        if (data.user?.id) {
+          sessionStorage.setItem("pending_coach", JSON.stringify({ id: data.user.id, name: name.trim(), email: email.trim() }));
+        }
         setConfirmEmail(true);
       }
     } catch (e) {
