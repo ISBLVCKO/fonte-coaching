@@ -780,6 +780,7 @@ function CoachSignupPage({ onUnlock, onGoLogin }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [confirmEmail, setConfirmEmail] = useState(false);
@@ -787,6 +788,10 @@ function CoachSignupPage({ onUnlock, onGoLogin }) {
   async function submit() {
     if (!name.trim() || !email.trim() || password.length < 6) {
       setError("Remplis tous les champs (mot de passe : 6 caractères minimum).");
+      return;
+    }
+    if (password !== passwordConfirm) {
+      setError("Les mots de passe ne correspondent pas.");
       return;
     }
     setLoading(true);
@@ -842,9 +847,10 @@ function CoachSignupPage({ onUnlock, onGoLogin }) {
         <div className="modal-form" style={{ marginTop: 20 }}>
           <label className="field"><span>Nom</span><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ton prénom et nom" /></label>
           <label className="field"><span>Email</span><input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-          <label className="field"><span>Mot de passe</span><input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} /></label>
+          <label className="field"><span>Mot de passe</span><input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+          <label className="field"><span>Confirmer le mot de passe</span><input type="password" autoComplete="new-password" value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} /></label>
           {error && <p className="onboarding-error">{error}</p>}
-          <button className="btn primary full" onClick={submit} disabled={loading || !name || !email || !password}>{loading ? "Création…" : "Créer mon compte"}</button>
+          <button className="btn primary full" onClick={submit} disabled={loading || !name || !email || !password || !passwordConfirm}>{loading ? "Création…" : "Créer mon compte"}</button>
           <p className="auth-switch-link">Déjà un compte ? <button className="link-btn" onClick={onGoLogin}>Se connecter</button></p>
         </div>
       </div>
