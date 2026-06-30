@@ -27,6 +27,31 @@ async function authSignIn(email, password) {
   return res.json();
 }
 
+async function authResetPassword(email) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.msg || err.message || "Erreur lors de l'envoi.");
+  }
+}
+
+async function authUpdatePassword(token, newPassword) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ password: newPassword }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.msg || err.message || "Erreur lors de la mise à jour.");
+  }
+  return res.json();
+}
+
 async function authVerifyOtp(email, token) {
   const res = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
     method: "POST",
@@ -593,6 +618,16 @@ export default function CoachApp() {
       if (hash === "#join") { setRoute({ view: "onboarding" }); return; }
       // Page de confirmation après paiement Stripe réussi
       if (hash === "#success") { setRoute({ view: "payment-success" }); return; }
+      // Retour après reset mot de passe : Supabase renvoie #access_token=...&type=recovery
+      if (hash.includes("access_token=") && hash.includes("type=recovery")) {
+        const params = new URLSearchParams(hash.replace(/^#/, ""));
+        const token = params.get("access_token");
+        if (token) {
+          window.location.hash = "";
+          setRoute({ view: "reset-password", token });
+        }
+        return;
+      }
       // Retour après confirmation email : Supabase renvoie #access_token=...&type=signup
       if (hash.includes("access_token=") && hash.includes("type=signup")) {
         const params = new URLSearchParams(hash.replace(/^#/, ""));
@@ -639,6 +674,7 @@ export default function CoachApp() {
 
   if (route.view === "loading") return <Shell><LoadingState /></Shell>;
   if (route.view === "auth-error") return <Shell><AuthErrorPage message={route.message} /></Shell>;
+  if (route.view === "reset-password") return <Shell><ResetPasswordPage token={route.token} /></Shell>;
   if (route.view === "student-portal") return <Shell><StudentPortal studentId={route.studentId} token={route.token} /></Shell>;
   if (route.view === "onboarding") return <Shell><OnboardingPage /></Shell>;
   if (route.view === "payment-success") return <Shell><PaymentSuccessPage /></Shell>;
@@ -684,6 +720,7 @@ function LandingPage({ onCoach, onSignup }) {
 function CoachLoginPage({ onUnlock, onGoSignup }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [forgotMode, setForgotMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   async function submit() {
@@ -699,6 +736,7 @@ function CoachLoginPage({ onUnlock, onGoSignup }) {
     }
     setLoading(false);
   }
+  if (forgotMode) return <ForgotPasswordPage onBack={() => setForgotMode(false)} />;
   return (
     <div className="pin-gate">
       <div className="pin-card login-card">
@@ -709,6 +747,7 @@ function CoachLoginPage({ onUnlock, onGoSignup }) {
           <label className="field"><span>Mot de passe</span><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} /></label>
           {error && <p className="onboarding-error">{error}</p>}
           <button className="btn primary full" onClick={submit} disabled={loading || !email || !password}>{loading ? "Connexion…" : "Se connecter"}</button>
+          <p className="auth-switch-link"><button className="link-btn" onClick={() => setForgotMode(true)}>Mot de passe oublié ?</button></p>
           {onGoSignup && <p className="auth-switch-link">Pas encore de compte ? <button className="link-btn" onClick={onGoSignup}>Créer un compte gratuit</button></p>}
         </div>
       </div>
@@ -883,6 +922,96 @@ function AuthErrorPage({ message }) {
         <p className="muted" style={{ lineHeight: 1.6, marginTop: 12 }}>{message}</p>
         <p className="muted" style={{ marginTop: 8 }}>Crée un nouveau compte ou reconnecte-toi.</p>
         <button className="btn primary full" style={{ marginTop: 24 }} onClick={() => { window.location.hash = ""; window.location.reload(); }}>Retour à l'accueil</button>
+      </div>
+    </div>
+  );
+}
+
+function ForgotPasswordPage({ onBack }) {
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit() {
+    if (!email.trim()) return;
+    setLoading(true);
+    setError("");
+    try {
+      await authResetPassword(email.trim());
+      setSent(true);
+    } catch (e) {
+      setError(e.message || "Une erreur est survenue.");
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div className="pin-gate">
+      <div className="pin-card login-card">
+        <div className="pin-logo"><div className="mark" /><span className="brand-name">Fonte</span></div>
+        <p className="pin-label">Mot de passe oublié</p>
+        {sent ? (
+          <div className="modal-form" style={{ marginTop: 20 }}>
+            <p className="auth-confirm-text">Un email de réinitialisation a été envoyé à <strong>{email}</strong>. Clique sur le lien pour choisir un nouveau mot de passe.</p>
+            <button className="btn primary full" style={{ marginTop: 16 }} onClick={onBack}>Retour à la connexion</button>
+          </div>
+        ) : (
+          <div className="modal-form" style={{ marginTop: 20 }}>
+            <label className="field"><span>Email</span><input type="email" autoFocus autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} /></label>
+            {error && <p className="onboarding-error">{error}</p>}
+            <button className="btn primary full" onClick={submit} disabled={loading || !email}>{loading ? "Envoi…" : "Envoyer le lien"}</button>
+            <p className="auth-switch-link"><button className="link-btn" onClick={onBack}>Retour à la connexion</button></p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ResetPasswordPage({ token }) {
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit() {
+    if (password.length < 6) { setError("Le mot de passe doit faire au moins 6 caractères."); return; }
+    if (password !== passwordConfirm) { setError("Les mots de passe ne correspondent pas."); return; }
+    setLoading(true);
+    setError("");
+    try {
+      await authUpdatePassword(token, password);
+      setDone(true);
+    } catch (e) {
+      setError(e.message || "Une erreur est survenue.");
+    }
+    setLoading(false);
+  }
+
+  if (done) return (
+    <div className="pin-gate">
+      <div className="pin-card login-card" style={{ textAlign: "center" }}>
+        <div className="pin-logo" style={{ justifyContent: "center" }}><div className="mark" /><span className="brand-name">Fonte</span></div>
+        <div className="ob-check-circle" style={{ margin: "28px auto 0" }}><Check size={32} color="#0E0F12" strokeWidth={3} /></div>
+        <p className="pin-label" style={{ marginTop: 20 }}>Mot de passe mis à jour</p>
+        <button className="btn primary full" style={{ marginTop: 24 }} onClick={() => { window.location.hash = ""; window.location.reload(); }}>Se connecter</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="pin-gate">
+      <div className="pin-card login-card">
+        <div className="pin-logo"><div className="mark" /><span className="brand-name">Fonte</span></div>
+        <p className="pin-label">Nouveau mot de passe</p>
+        <div className="modal-form" style={{ marginTop: 20 }}>
+          <label className="field"><span>Nouveau mot de passe</span><input type="password" autoFocus autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+          <label className="field"><span>Confirmer le mot de passe</span><input type="password" autoComplete="new-password" value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} /></label>
+          {error && <p className="onboarding-error">{error}</p>}
+          <button className="btn primary full" onClick={submit} disabled={loading || !password || !passwordConfirm}>{loading ? "Mise à jour…" : "Changer mon mot de passe"}</button>
+        </div>
       </div>
     </div>
   );
