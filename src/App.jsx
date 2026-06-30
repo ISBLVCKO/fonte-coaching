@@ -27,6 +27,19 @@ async function authSignIn(email, password) {
   return res.json();
 }
 
+async function authVerifyOtp(email, token) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY },
+    body: JSON.stringify({ email, token, type: "signup" }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.msg || err.message || "Code invalide ou expiré.");
+  }
+  return res.json();
+}
+
 // Inscription d'un nouveau coach via Supabase Auth
 async function authSignUp(email, password) {
   const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
@@ -704,6 +717,65 @@ function CoachLoginPage({ onUnlock, onGoSignup }) {
 }
 
 // Page d'inscription d'un nouveau coach (plan gratuit, 3 élèves max)
+function OtpConfirmForm({ email, name, onUnlock, onGoLogin }) {
+  const [code, setCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function verify() {
+    if (code.length < 6) { setError("Entre le code à 6 chiffres reçu par email."); return; }
+    setLoading(true);
+    setError("");
+    try {
+      const data = await authVerifyOtp(email, code.trim());
+      if (data.access_token) {
+        sessionStorage.setItem("coach_token", data.access_token);
+        const pending = JSON.parse(sessionStorage.getItem("pending_coach") || "null");
+        const uid = pending?.id || data.user?.id;
+        if (uid) {
+          await safeSet(KEYS.coachProfile(uid), {
+            name: pending?.name || name,
+            email: pending?.email || email,
+            plan: "free",
+            studentCount: 0,
+          });
+          sessionStorage.removeItem("pending_coach");
+        }
+        onUnlock();
+      } else {
+        setError("Code invalide. Vérifie ton email et réessaie.");
+      }
+    } catch (e) {
+      setError(e.message || "Code invalide ou expiré.");
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div className="modal-form" style={{ marginTop: 20 }}>
+      <label className="field">
+        <span>Code de confirmation</span>
+        <input
+          autoFocus
+          type="text"
+          inputMode="numeric"
+          maxLength={8}
+          value={code}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+          onKeyDown={(e) => e.key === "Enter" && verify()}
+          placeholder="123456"
+          style={{ letterSpacing: "0.3em", fontSize: 22, textAlign: "center" }}
+        />
+      </label>
+      {error && <p className="onboarding-error">{error}</p>}
+      <button className="btn primary full" onClick={verify} disabled={loading || code.length < 6}>
+        {loading ? "Vérification…" : "Confirmer mon compte"}
+      </button>
+      <p className="auth-switch-link">Déjà un compte ? <button className="link-btn" onClick={onGoLogin}>Se connecter</button></p>
+    </div>
+  );
+}
+
 function CoachSignupPage({ onUnlock, onGoLogin }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -755,8 +827,8 @@ function CoachSignupPage({ onUnlock, onGoLogin }) {
         <div className="pin-card login-card">
           <div className="pin-logo"><div className="mark" /><span className="brand-name">Fonte</span></div>
           <p className="pin-label">Vérifie ton email</p>
-          <p className="auth-confirm-text">Un email de confirmation a été envoyé à <strong>{email}</strong>. Clique sur le lien pour activer ton compte, puis connecte-toi.</p>
-          <button className="btn primary full" onClick={onGoLogin}>Se connecter</button>
+          <p className="auth-confirm-text">Un code de confirmation a été envoyé à <strong>{email}</strong>. Entre le code ci-dessous pour activer ton compte.</p>
+          <OtpConfirmForm email={email} name={name} onUnlock={onUnlock} onGoLogin={onGoLogin} />
         </div>
       </div>
     );
