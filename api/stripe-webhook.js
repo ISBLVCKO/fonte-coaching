@@ -94,6 +94,9 @@ async function upgradeCoachToPro(coachId) {
     body: JSON.stringify({
       key: profileKey,
       value: JSON.stringify(profile),
+      // La clé service bypasse RLS : sans coach_id explicite, une ligne créée ici
+      // serait orpheline (coach_id NULL) et invisible pour le coach (policy coach_select).
+      coach_id: coachId,
       updated_at: new Date().toISOString(),
     }),
   });

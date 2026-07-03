@@ -587,8 +587,8 @@ function calcMacros(weightKg, goalKey, sex = "H", heightCm = "", age = "") {
   }
   const tdee = Math.round(bmr * 1.55); // activité modérée
   const kcal = Math.round(tdee + rule.surplus);
-  const protein = Math.round(w * rule.proteinPerKg[sex] || rule.proteinPerKg["H"]);
-  const fat = Math.round(w * rule.fatPerKg[sex] || rule.fatPerKg["H"]);
+  const protein = Math.round(w * (rule.proteinPerKg[sex] || rule.proteinPerKg["H"]));
+  const fat = Math.round(w * (rule.fatPerKg[sex] || rule.fatPerKg["H"]));
   const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
   return { kcal, protein, carbs, fat };
 }
@@ -659,6 +659,19 @@ export default function CoachApp() {
     window.addEventListener("hashchange", resolve);
     return () => window.removeEventListener("hashchange", resolve);
   }, []);
+
+  // Déconnexion automatique quand le JWT expire : sinon toutes les requêtes
+  // passent en 401 et les sauvegardes échouent silencieusement.
+  useEffect(() => {
+    if (!coachUnlocked) return;
+    const timer = setInterval(() => {
+      if (!isTokenValid()) {
+        sessionStorage.removeItem("coach_token");
+        setCoachUnlocked(false);
+      }
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [coachUnlocked]);
 
   const loadIndex = useCallback(async () => {
     const idx = (await safeGet(KEYS.students)) || [];
@@ -1052,11 +1065,24 @@ function CoachApp_Inner({ students, refreshIndex }) {
   const [showUpgrade, setShowUpgrade] = useState(false);
   const isMobile = useIsMobile();
 
-  // Charger le profil coach au montage pour connaître son plan
+  // Charger le profil coach au montage pour connaître son plan.
+  // Si la ligne n'existe pas (ex: confirmation email ouverte dans un autre navigateur,
+  // donc pending_coach absent), créer le profil free par défaut — sinon la limite
+  // freemium ne s'applique jamais (coachProfile reste null).
   useEffect(() => {
-    const uid = getCoachUid();
-    if (!uid) return;
-    safeGet(KEYS.coachProfile(uid)).then((p) => { if (p) setCoachProfile(p); });
+    const coachUid = getCoachUid();
+    if (!coachUid) return;
+    (async () => {
+      try {
+        const key = KEYS.coachProfile(coachUid);
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/app_storage?key=eq.${encodeURIComponent(key)}&select=value`, { headers: getAuthHeaders() });
+        if (!res.ok) return; // erreur réseau/auth : ne surtout pas créer un profil vide par-dessus
+        const rows = await res.json();
+        if (rows.length) { setCoachProfile(JSON.parse(rows[0].value)); return; }
+        const fresh = { name: "", email: "", plan: "free", studentCount: 0 };
+        if (await safeSet(key, fresh)) setCoachProfile(fresh);
+      } catch {}
+    })();
   }, []);
 
   function goToStudent(id) { setSelectedId(id); setSection("students"); setNavOpen(false); }
@@ -1288,8 +1314,10 @@ function TopBar({ section, query, setQuery, onAdd, isMobile, onMenu }) {
 function DashboardSection({ students, onOpenStudent }) {
   const [fullStudents, setFullStudents] = useState([]);
   useEffect(() => {
+    let alive = true;
     if (!students.length) { setFullStudents([]); return; }
-    Promise.all(students.map((s) => safeGet(KEYS.student(s.id)))).then((res) => setFullStudents(res.filter(Boolean)));
+    Promise.all(students.map((s) => safeGet(KEYS.student(s.id)))).then((res) => { if (alive) setFullStudents(res.filter(Boolean)); });
+    return () => { alive = false; };
   }, [students]);
 
   const total = students.length;
@@ -1333,8 +1361,10 @@ function Kpi({ label, icon, num, unit }) {
 function StudentsSection({ students, query, onOpenStudent, onAdd }) {
   const [fullStudents, setFullStudents] = useState([]);
   useEffect(() => {
+    let alive = true;
     if (!students.length) { setFullStudents([]); return; }
-    Promise.all(students.map((s) => safeGet(KEYS.student(s.id)))).then((res) => setFullStudents(res.filter(Boolean)));
+    Promise.all(students.map((s) => safeGet(KEYS.student(s.id)))).then((res) => { if (alive) setFullStudents(res.filter(Boolean)); });
+    return () => { alive = false; };
   }, [students]);
   const filtered = fullStudents.filter((s) => s.name.toLowerCase().includes(query.toLowerCase()));
   if (students.length === 0) return (
@@ -1414,8 +1444,13 @@ function OnboardingPage() {
     try {
       const student = newStudent({ name: name.trim(), sex, age, height, weight, sessionsPerWeek: sessions, mealsPerDay: meals });
       const idx = (await safeGet(KEYS.students)) || [];
-      await safeSet(KEYS.students, [...idx, { id: student.id, name: student.name, sex: student.sex, createdAt: student.createdAt }]);
-      await safeSet(KEYS.student(student.id), student);
+      const okIndex = await safeSet(KEYS.students, [...idx, { id: student.id, name: student.name, sex: student.sex, createdAt: student.createdAt }]);
+      const okStudent = await safeSet(KEYS.student(student.id), student);
+      if (!okIndex || !okStudent) {
+        setError("Impossible d'envoyer ton inscription pour le moment. Réessaie plus tard ou contacte directement ton coach.");
+        setSaving(false);
+        return;
+      }
       setStep("done");
     } catch (e) {
       setError("Une erreur est survenue. Réessaie.");
@@ -1519,7 +1554,16 @@ function StudentDetailPage({ studentId, onBack, onDeleted, isMobile, reloadSigna
   const [confirmDelete, setConfirmDelete] = useState(false);
   const load = useCallback(async () => { setStudent(await safeGet(KEYS.student(studentId))); }, [studentId]);
   useEffect(() => { load(); }, [load, reloadSignal]);
-  async function save(updated) { setStudent(updated); await safeSet(KEYS.student(studentId), updated); }
+  // Avertir le coach si la persistance échoue (session expirée, réseau…) au lieu de perdre les modifs en silence.
+  const saveFailWarnedAt = useRef(0);
+  async function save(updated) {
+    setStudent(updated);
+    const ok = await safeSet(KEYS.student(studentId), updated);
+    if (!ok && Date.now() - saveFailWarnedAt.current > 30000) {
+      saveFailWarnedAt.current = Date.now();
+      alert("La sauvegarde a échoué. Vérifie ta connexion ou reconnecte-toi — les dernières modifications ne sont pas enregistrées.");
+    }
+  }
   async function handleDelete() {
     const idx = (await safeGet(KEYS.students)) || [];
     await safeSet(KEYS.students, idx.filter((s) => s.id !== studentId));
@@ -1617,8 +1661,9 @@ function ProfilTab({ student, save }) {
   }
   async function updateField(field, value) { await save({ ...student, [field]: value }); }
   const history = student.weightHistory || [];
-  const max = Math.max(...history.map((h) => h.value), 1);
-  const min = Math.min(...history.map((h) => h.value), 0);
+  const values = history.map((h) => h.value);
+  const max = values.length ? Math.max(...values) : 1;
+  const min = values.length ? Math.min(...values) : 0;
   const range = max - min || 1;
   return (
     <div className="panel-grid">
@@ -2107,13 +2152,16 @@ function StatsSection({ students }) {
   const [sessions, setSessions] = useState([]);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
+    let alive = true;
     async function load() {
       const full = await Promise.all(students.map((s) => safeGet(KEYS.student(s.id))));
+      if (!alive) return;
       setFullStudents(full.filter(Boolean));
       setSessions((await safeGet(KEYS.sessions)) || []);
       setLoaded(true);
     }
     load();
+    return () => { alive = false; };
   }, [students]);
   if (!loaded) return <LoadingState />;
   const total = fullStudents.length;
