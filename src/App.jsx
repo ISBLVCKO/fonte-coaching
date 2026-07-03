@@ -8,13 +8,18 @@ import {
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
 
+// Token d'accès élève (portail #student=) — envoyé en header pour la validation RLS côté serveur
+let STUDENT_TOKEN = null;
+
 function getAuthHeaders() {
   const jwt = sessionStorage.getItem("coach_token");
-  return {
+  const headers = {
     apikey: SUPABASE_KEY,
     Authorization: `Bearer ${jwt || SUPABASE_KEY}`,
     "Content-Type": "application/json",
   };
+  if (STUDENT_TOKEN) headers["x-student-token"] = STUDENT_TOKEN;
+  return headers;
 }
 
 async function authSignIn(email, password) {
@@ -115,12 +120,13 @@ async function safeGet(key) {
   } catch { return null; }
 }
 
-async function safeSet(key, value) {
+async function safeSet(key, value, extra = {}) {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/app_storage`, {
       method: "POST",
       headers: { ...getAuthHeaders(), Prefer: "resolution=merge-duplicates" },
-      body: JSON.stringify({ key, value: JSON.stringify(value), updated_at: new Date().toISOString() }),
+      // extra permet de fixer des colonnes supplémentaires (ex: coach_id pour les écritures anonymes)
+      body: JSON.stringify({ key, value: JSON.stringify(value), updated_at: new Date().toISOString(), ...extra }),
     });
     return res.ok;
   } catch { return false; }
@@ -615,7 +621,9 @@ export default function CoachApp() {
       const mStudent = hash.match(/student=([a-z0-9]+)(?:\.([a-z0-9]+))?/i);
       // Normaliser en minuscules pour éviter les incohérences de validation côté serveur
       if (mStudent) { setRoute({ view: "student-portal", studentId: mStudent[1].toLowerCase(), token: (mStudent[2] || "").toLowerCase() }); return; }
-      if (hash === "#join") { setRoute({ view: "onboarding" }); return; }
+      // Lien d'inscription élève : #join=<uid du coach> (ancien format #join sans uid → écran d'erreur)
+      const mJoin = hash.match(/^#join(?:=([0-9a-f-]{8,}))?$/i);
+      if (mJoin) { setRoute({ view: "onboarding", coachId: mJoin[1] || "" }); return; }
       // Page de confirmation après paiement Stripe réussi
       if (hash === "#success") { setRoute({ view: "payment-success" }); return; }
       // Retour après reset mot de passe : Supabase renvoie #access_token=...&type=recovery
@@ -674,7 +682,26 @@ export default function CoachApp() {
   }, [coachUnlocked]);
 
   const loadIndex = useCallback(async () => {
-    const idx = (await safeGet(KEYS.students)) || [];
+    let idx = (await safeGet(KEYS.students)) || [];
+    // Réconciliation : les élèves auto-inscrits via #join créent leur fiche student:{id}
+    // avec coach_id mais ne peuvent pas modifier l'index (RLS). On intègre ici les
+    // fiches manquantes — RLS ne renvoie que les lignes du coach connecté.
+    if (getCoachUid()) {
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/app_storage?key=like.student:*&select=key,value`, { headers: getAuthHeaders() });
+        if (res.ok) {
+          const rows = await res.json();
+          const known = new Set(idx.map((s) => s.id));
+          const missing = rows
+            .map((r) => { try { return JSON.parse(r.value); } catch { return null; } })
+            .filter((s) => s && s.id && !known.has(s.id));
+          if (missing.length) {
+            idx = [...idx, ...missing.map((s) => ({ id: s.id, name: s.name, sex: s.sex, createdAt: s.createdAt }))];
+            await safeSet(KEYS.students, idx);
+          }
+        }
+      } catch {}
+    }
     setStudents(idx);
     return idx;
   }, []);
@@ -689,7 +716,7 @@ export default function CoachApp() {
   if (route.view === "auth-error") return <Shell><AuthErrorPage message={route.message} /></Shell>;
   if (route.view === "reset-password") return <Shell><ResetPasswordPage token={route.token} /></Shell>;
   if (route.view === "student-portal") return <Shell><StudentPortal studentId={route.studentId} token={route.token} /></Shell>;
-  if (route.view === "onboarding") return <Shell><OnboardingPage /></Shell>;
+  if (route.view === "onboarding") return <Shell><OnboardingPage coachId={route.coachId} /></Shell>;
   if (route.view === "payment-success") return <Shell><PaymentSuccessPage /></Shell>;
   if (!coachUnlocked) return <Shell><CoachAuthPage onUnlock={handleUnlock} /></Shell>;
   return <Shell><CoachApp_Inner students={students} refreshIndex={loadIndex} /></Shell>;
@@ -1292,7 +1319,8 @@ function TopBar({ section, query, setQuery, onAdd, isMobile, onMenu }) {
   const today = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
   const [copied, setCopied] = useState(false);
   function copyJoinLink() {
-    const link = `${window.location.origin}${window.location.pathname}#join`;
+    // L'uid du coach dans le lien permet de rattacher la fiche auto-créée au bon coach (coach_id)
+    const link = `${window.location.origin}${window.location.pathname}#join=${getCoachUid() || ""}`;
     navigator.clipboard.writeText(link).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
   }
   return (
@@ -1422,7 +1450,7 @@ function StudentCard({ student, onClick }) {
   );
 }
 
-function OnboardingPage() {
+function OnboardingPage({ coachId }) {
   const [step, setStep] = useState("form");
   const [name, setName] = useState("");
   const [sex, setSex] = useState("H");
@@ -1443,10 +1471,10 @@ function OnboardingPage() {
     setError("");
     try {
       const student = newStudent({ name: name.trim(), sex, age, height, weight, sessionsPerWeek: sessions, mealsPerDay: meals });
-      const idx = (await safeGet(KEYS.students)) || [];
-      const okIndex = await safeSet(KEYS.students, [...idx, { id: student.id, name: student.name, sex: student.sex, createdAt: student.createdAt }]);
-      const okStudent = await safeSet(KEYS.student(student.id), student);
-      if (!okIndex || !okStudent) {
+      // La fiche est rattachée au coach via coach_id ; l'index du coach est
+      // réconcilié automatiquement à son prochain chargement (loadIndex).
+      const okStudent = await safeSet(KEYS.student(student.id), student, { coach_id: coachId });
+      if (!okStudent) {
         setError("Impossible d'envoyer ton inscription pour le moment. Réessaie plus tard ou contacte directement ton coach.");
         setSaving(false);
         return;
@@ -1457,6 +1485,17 @@ function OnboardingPage() {
     }
     setSaving(false);
   }
+
+  // Ancien lien #join (sans uid coach) : impossible de rattacher la fiche à un coach
+  if (!coachId) return (
+    <div className="onboarding-wrap">
+      <div className="onboarding-card" style={{ textAlign: "center" }}>
+        <div className="onboarding-logo" style={{ justifyContent: "center" }}><div className="mark" /><span className="brand-name">Fonte</span></div>
+        <h2 style={{ marginTop: 20 }}>Lien d'inscription invalide</h2>
+        <p className="muted" style={{ lineHeight: 1.6 }}>Ce lien n'est plus valide. Demande à ton coach de t'envoyer un nouveau lien d'inscription.</p>
+      </div>
+    </div>
+  );
 
   if (step === "done") return (
     <div className="onboarding-wrap">
@@ -1881,7 +1920,7 @@ function DieteTab({ student, save }) {
   );
 }
 
-function ChatPanel({ studentId, sender }) {
+function ChatPanel({ studentId, sender, coachId }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -1904,7 +1943,9 @@ function ChatPanel({ studentId, sender }) {
     const msg = { id: uid(), from: sender, text: text.trim(), ts: Date.now() };
     const next = [...messages, msg];
     setMessages(next); setText("");
-    await safeSet(KEYS.chat(studentId), next);
+    // Côté élève (anon), coach_id doit être fourni explicitement : sans lui, une
+    // conversation créée par l'élève serait invisible pour le coach (RLS coach_select).
+    await safeSet(KEYS.chat(studentId), next, coachId ? { coach_id: coachId } : {});
   }
   if (!loaded) return <LoadingState />;
   return (
@@ -1927,16 +1968,26 @@ function ChatPanel({ studentId, sender }) {
 }
 
 function StudentPortal({ studentId, token }) {
+  // Header envoyé sur toutes les requêtes du portail : permet à la RLS (migration 003)
+  // de valider le token côté serveur au lieu du seul contrôle client.
+  STUDENT_TOKEN = token || null;
   const [student, setStudent] = useState(null);
+  const [coachId, setCoachId] = useState(null);
   const [tab, setTab] = useState("entrainement");
   const [notFound, setNotFound] = useState(false);
   const [forbidden, setForbidden] = useState(false);
   const pollRef = useRef(null);
   const load = useCallback(async () => {
-    const s = await safeGet(KEYS.student(studentId));
-    if (!s) { setNotFound(true); return; }
-    if (s.accessToken && token !== s.accessToken) { setForbidden(true); return; }
-    setStudent(s);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/app_storage?key=eq.${encodeURIComponent(KEYS.student(studentId))}&select=value,coach_id`, { headers: getAuthHeaders() });
+      if (!res.ok) return; // erreur transitoire : on retentera au prochain poll
+      const rows = await res.json();
+      if (!rows.length) { setNotFound(true); return; }
+      const s = JSON.parse(rows[0].value);
+      if (s.accessToken && token !== s.accessToken) { setForbidden(true); return; }
+      setCoachId(rows[0].coach_id || null);
+      setStudent(s);
+    } catch {}
   }, [studentId, token]);
   useEffect(() => { load(); pollRef.current = setInterval(load, 5000); return () => clearInterval(pollRef.current); }, [load]);
   if (notFound) return <div className="empty-state"><div className="empty-plate"><User size={30} strokeWidth={1.5} /></div><h2>Profil introuvable</h2><p>Ce lien ne correspond à aucun élève. Vérifie le lien avec ton coach.</p></div>;
@@ -2004,7 +2055,7 @@ function StudentPortal({ studentId, token }) {
             }
           </div>
         )}
-        {tab === "chat" && <ChatPanel studentId={studentId} sender="student" />}
+        {tab === "chat" && <ChatPanel studentId={studentId} sender="student" coachId={coachId} />}
       </div>
 
       <nav className="sp-bottom-nav">
